@@ -1,0 +1,114 @@
+
+services:
+  # 1. Ollama - Motor de IA
+  ollama:
+    image: ollama/ollama:latest
+    container_name: astro-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_KEEP_ALIVE=24h
+      - OLLAMA_HOST=0.0.0.0
+    restart: unless-stopped
+    networks:
+      - astro-network
+
+  # 2. Backend - API FastAPI
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: astro-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - ./conocimiento:/app/conocimiento
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+      - PYTHONUNBUFFERED=1
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+    depends_on:
+      - ollama
+    restart: unless-stopped
+    networks:
+      - astro-network
+
+  # 3. Frontend - Next.js
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: astro-frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - NEXT_PUBLIC_API_URL=http://${HOST_IP}:8000
+      - NEXT_PUBLIC_WS_URL=ws://${HOST_IP}:8000/ws
+      - HOST_IP=${HOST_IP}
+      - WATCHPACK_POLLING=true
+      - NODE_ENV=development
+    command: ["npm", "run", "dev", "--", "--hostname", "0.0.0.0"]
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - astro-network
+
+  telegram-bot:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: astro-telegram-bot
+    volumes:
+      - ./backend:/app
+      - ./conocimiento:/app/conocimiento
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+      - PYTHONUNBUFFERED=1
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+    depends_on:
+      - ollama
+      - backend
+    restart: unless-stopped
+    networks:
+      - astro-network
+    command: python telegram_bot.py
+
+  whatsapp-bot:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: astro-whatsapp-bot
+    ports:
+      - "8001:8001"  # Puerto diferente al backend
+    volumes:
+      - ./backend:/app
+      - ./conocimiento:/app/conocimiento
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+      - PYTHONUNBUFFERED=1
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
+      - TWILIO_WHATSAPP_NUMBER=${TWILIO_WHATSAPP_NUMBER}
+    depends_on:
+      - ollama
+      - backend
+    restart: unless-stopped
+    networks:
+      - astro-network
+    command: uvicorn whatsapp_bot:app --host 0.0.0.0 --port 8001 --reload
+
+volumes:
+  ollama_data:
+    driver: local
+
+networks:
+  astro-network:
+    driver: bridge

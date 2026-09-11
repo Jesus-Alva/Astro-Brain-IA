@@ -1,0 +1,22 @@
+ia:
+  nombre: "AstroIA"
+  modelo: "mistral"
+  temperatura: 0.7
+  max_contexto: 10
+  modo_personalidad: "amigable"
+
+memoria:
+  tipo: "vectorial"
+  directorio: "conocimiento/"
+  auto_aprender: true
+  min_mensajes_para_aprender: 3
+  similaridad_minima: 0.7
+
+categorias:
+  - "datos_personales"
+  - "gustos_y_preferencias"
+  - "conocimiento_tecnico"
+  - "metas_y_proyectos"
+  - "opiniones"
+  - "general"
+  - "feedback"

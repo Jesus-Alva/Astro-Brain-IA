@@ -1,0 +1,78 @@
+# ============================================
+#  ASTRO-IA - Docker Compose
+# ============================================
+
+services:
+  # 1. Servicio de Ollama (motor de IA)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: astro-ia-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama  # Modelos descargados
+    environment:
+      - OLLAMA_KEEP_ALIVE=24h
+      - OLLAMA_HOST=0.0.0.0
+    restart: unless-stopped
+    networks:
+      - astro-network
+    # Si tienes GPU NVIDIA (opcional):
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  # 2. Servicio de la IA (Streamlit + API)
+  astro-ia:
+    build: .
+    container_name: astro-ia-web
+    ports:
+      - "8501:8501"  # Streamlit web
+      - "8000:8000"  # API REST
+    volumes:
+      - ./conocimiento:/app/conocimiento  # Datos persistentes
+      - ./config.yaml:/app/config.yaml:ro  # Configuración
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      - ollama
+    restart: unless-stopped
+    networks:
+      - astro-network
+    # Puedes elegir qué servicio iniciar:
+    # command: ["streamlit", "run", "web_app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+    # command: ["python", "api.py"]
+    # command: ["python", "app.py"]
+
+# 3. Servicio de la API (opcional, separado)
+  astro-api:
+    build: .
+    container_name: astro-ia-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./conocimiento:/app/conocimiento
+      - ./config.yaml:/app/config.yaml:ro
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    depends_on:
+      - ollama
+    restart: unless-stopped
+    networks:
+      - astro-network
+    command: ["python", "api.py"]
+
+# Volúmenes persistentes
+volumes:
+  ollama_data:
+    driver: local
+
+# Redes
+networks:
+  astro-network:
+    driver: bridge
