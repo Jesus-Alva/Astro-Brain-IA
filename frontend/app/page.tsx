@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   enviarMensaje,
   enviarFeedback,
@@ -8,6 +9,12 @@ import {
   verificarSesion,
   logout,
   obtenerToken,
+  listarConversaciones,
+  crearConversacion,
+  obtenerConversacion,
+  renombrarConversacion,
+  eliminarConversacion,
+  ConversationSummary,
 } from '@/lib/api';
 import { Message } from '@/types';
 import { Header } from '@/components/Header';
@@ -28,6 +35,10 @@ export default function Home() {
   const [personalidad, setPersonalidad] = useState('amigable');
   const [sidebarAbierto, setSidebarAbierto] = useState(true);
   const [feedbackRefresh, setFeedbackRefresh] = useState(0);
+  const [conversaciones, setConversaciones] = useState<ConversationSummary[]>([]);
+  const [conversationId, setConversationId] = useState<string>();
+  const [conversacionEditando, setConversacionEditando] = useState<string>();
+  const [tituloEditado, setTituloEditado] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Verificar sesión al cargar
@@ -39,6 +50,21 @@ export default function Home() {
       if (valido && usuarioGuardado) {
         setUsuario(usuarioGuardado);
         setAutenticado(true);
+        try {
+          const disponibles = await listarConversaciones();
+          setConversaciones(disponibles);
+          if (disponibles[0]) {
+            const conversacion = await obtenerConversacion(disponibles[0].id);
+            setConversationId(conversacion.id);
+            setMessages(conversacion.mensajes);
+          } else {
+            const nueva = await crearConversacion();
+            setConversationId(nueva.id);
+            setConversaciones([nueva]);
+          }
+        } catch (error) {
+          console.error('Error al cargar conversaciones:', error);
+        }
       } else {
         localStorage.removeItem('auth_token');
         localStorage.removeItem('usuario');
@@ -78,6 +104,8 @@ export default function Home() {
     setAutenticado(false);
     setUsuario('');
     setMessages([]);
+    setConversaciones([]);
+    setConversationId(undefined);
   };
 
   const handleSubmit = async (e?: React.FormEvent) => {
@@ -97,7 +125,13 @@ export default function Home() {
     setIsLoading(true);
 
     try {
-      const response = await enviarMensaje(mensajeActual, usuario, personalidad);
+      const response = await enviarMensaje(mensajeActual, usuario, personalidad, conversationId);
+      setConversationId(response.conversation_id);
+      setConversaciones((prev) => prev.map((conversacion) =>
+        conversacion.id === response.conversation_id
+          ? { ...conversacion, titulo: response.conversation_title, total_mensajes: conversacion.total_mensajes + 2 }
+          : conversacion
+      ));
 
       const assistantMessage: Message = {
         id: crypto.randomUUID(),
@@ -150,9 +184,48 @@ export default function Home() {
     [messages, usuario]
   );
 
-  const limpiarConversacion = () => {
-    if (confirm('¿Estás seguro de que quieres limpiar la conversación?')) {
-      setMessages([]);
+  const nuevaConversacion = async () => {
+    const nueva = await crearConversacion();
+    setConversationId(nueva.id);
+    setConversaciones((prev) => [nueva, ...prev]);
+    setMessages([]);
+  };
+
+  const seleccionarConversacion = async (id: string) => {
+    const conversacion = await obtenerConversacion(id);
+    setConversationId(id);
+    setMessages(conversacion.mensajes);
+  };
+
+  const iniciarEdicionConversacion = (conversacion: ConversationSummary) => {
+    setConversacionEditando(conversacion.id);
+    setTituloEditado(conversacion.titulo);
+  };
+
+  const guardarNombreConversacion = async () => {
+    if (!conversacionEditando || !tituloEditado.trim()) return;
+    const actualizada = await renombrarConversacion(
+      conversacionEditando,
+      tituloEditado
+    );
+    setConversaciones((prev) => prev.map((conversacion) =>
+      conversacion.id === actualizada.id ? actualizada : conversacion
+    ));
+    setConversacionEditando(undefined);
+    setTituloEditado('');
+  };
+
+  const borrarConversacion = async (id: string) => {
+    if (!confirm('¿Eliminar esta conversación? Esta acción no se puede deshacer.')) return;
+    await eliminarConversacion(id);
+    const restantes = conversaciones.filter((conversacion) => conversacion.id !== id);
+    setConversaciones(restantes);
+    if (id === conversationId) {
+      if (restantes[0]) {
+        await seleccionarConversacion(restantes[0].id);
+      } else {
+        await nuevaConversacion();
+      }
     }
   };
 
@@ -200,29 +273,103 @@ export default function Home() {
         />
 
         <div className="flex gap-6">
-          <aside
-            className={`${sidebarAbierto ? 'w-80' : 'w-0'
-              } transition-all duration-300 overflow-hidden`}
-          >
+          <div className="flex shrink-0 flex-col gap-3">
+            <motion.button
+              onClick={() => setSidebarAbierto(!sidebarAbierto)}
+              aria-label={sidebarAbierto ? 'Ocultar menú lateral' : 'Mostrar menú lateral'}
+              title={sidebarAbierto ? 'Ocultar menú lateral' : 'Mostrar menú lateral'}
+              className={`${sidebarAbierto ? 'w-full' : 'w-auto'} self-center rounded-full border border-purple-400/40 bg-linear-to-r from-purple-600 to-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-purple-500/20 transition-all hover:scale-105 hover:from-purple-500 hover:to-blue-500`}
+              whileHover={{ scale: 1.05, y: -2 }}
+              whileTap={{ scale: 0.96 }}
+              transition={{ type: 'spring', stiffness: 420, damping: 24 }}
+            >
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.span
+                  key={sidebarAbierto ? 'cerrar' : 'abrir'}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.16 }}
+                >
+                  {sidebarAbierto ? '◀  Menú' : 'Menú  ▶'}
+                </motion.span>
+              </AnimatePresence>
+            </motion.button>
+
+            <motion.aside
+              initial={false}
+              animate={{
+                width: sidebarAbierto ? 320 : 64,
+                height: 'auto',
+              }}
+              transition={{ duration: 0.45, ease: 'easeInOut' }}
+              className={`${sidebarAbierto ? '' : 'sidebar-compact'} overflow-hidden`}
+            >
             <div className="space-y-4">
               <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 shadow-sm">
                 <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
-                  🛠️ Acciones
+                  <span className="sidebar-title-icon" title="Acciones">🛠️</span> <span className="sidebar-label">Acciones</span>
                 </h3>
-                <div className="space-y-2">
+                <div className="sidebar-detail space-y-2">
                   <button
-                    onClick={limpiarConversacion}
+                    onClick={nuevaConversacion}
                     className="w-full text-left px-3 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-sm transition-colors"
                   >
-                    🗑️ Limpiar conversación
+                    ➕ <span className="sidebar-label">Nueva conversación</span>
                   </button>
                   <button
                     onClick={exportarConversacion}
                     disabled={messages.length === 0}
                     className="w-full text-left px-3 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-sm transition-colors disabled:opacity-50"
                   >
-                    📥 Exportar conversación
+                    📥 <span className="sidebar-label">Exportar conversación</span>
                   </button>
+                </div>
+              </div>
+
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 shadow-sm">
+                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                  <span className="sidebar-title-icon" title="Conversaciones">💬</span> <span className="sidebar-label">Conversaciones</span>
+                </h3>
+                <div className="sidebar-detail space-y-2 max-h-64 overflow-y-auto">
+                  {conversaciones.map((conversacion) => (
+                    <div key={conversacion.id} className="flex items-center gap-2">
+                      {conversacionEditando === conversacion.id ? (
+                        <input
+                          autoFocus
+                          value={tituloEditado}
+                          onChange={(e) => setTituloEditado(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') guardarNombreConversacion();
+                            if (e.key === 'Escape') setConversacionEditando(undefined);
+                          }}
+                          onBlur={guardarNombreConversacion}
+                          className="flex-1 min-w-0 px-3 py-2 rounded-lg text-sm bg-gray-100 dark:bg-gray-700 border border-purple-500 outline-none"
+                        />
+                      ) : (
+                        <button
+                          onClick={() => seleccionarConversacion(conversacion.id)}
+                          className={`flex-1 text-left px-3 py-2 rounded-lg text-sm truncate ${conversationId === conversacion.id ? 'bg-purple-100 dark:bg-purple-900/40' : 'bg-gray-100 dark:bg-gray-700'}`}
+                        >
+                          {conversacion.titulo}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => iniciarEdicionConversacion(conversacion)}
+                        className="px-2 py-2 text-gray-500 hover:text-purple-600"
+                        title="Cambiar nombre"
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        onClick={() => borrarConversacion(conversacion.id)}
+                        className="px-2 py-2 text-red-500 hover:text-red-700"
+                        title="Eliminar conversación"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  ))}
                 </div>
               </div>
 
@@ -232,14 +379,9 @@ export default function Home() {
 
               <FeedbackStats key={feedbackRefresh} />
             </div>
-          </aside>
+            </motion.aside>
 
-          <button
-            onClick={() => setSidebarAbierto(!sidebarAbierto)}
-            className="self-start p-2 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors border border-gray-200 dark:border-gray-700"
-          >
-            {sidebarAbierto ? '◀' : '▶'}
-          </button>
+          </div>
 
           <main className="flex-1">
             <div className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm">

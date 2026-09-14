@@ -79,6 +79,29 @@ body {
    COMPONENTES REUTILIZABLES
    ============================================ */
 @layer components {
+  .sidebar-compact .sidebar-label,
+  .sidebar-compact .sidebar-detail {
+    display: none;
+  }
+
+  .sidebar-compact > div > div {
+    padding: 0.5rem;
+  }
+
+  .sidebar-compact button {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+    text-align: center;
+  }
+
+  .sidebar-compact h3 {
+    text-align: center;
+  }
+
+  .sidebar-compact > div > div > button {
+    justify-content: center;
+  }
+
   .card {
     background-color: var(--bg-secondary);
     border: 1px solid var(--border-color);

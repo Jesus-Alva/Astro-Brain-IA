@@ -53,10 +53,10 @@ export function FeedbackStats() {
     return (
         <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 shadow-sm">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
-                ⭐ Feedback
+                <span className="sidebar-title-icon" title="Feedback">⭐</span> <span className="sidebar-label">Feedback</span>
             </h3>
 
-            <div className="space-y-3">
+            <div className="sidebar-detail space-y-3">
                 <div>
                     <div className="flex justify-between text-xs mb-1">
                         <span className="text-gray-600 dark:text-gray-400">

@@ -18,7 +18,7 @@ export function Header({ isConnected, usuario, personalidad, onPersonalidadChang
         return (
             <header className="flex justify-between items-center mb-6 p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
                 <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-2xl">
+                    <div className="w-12 h-12 bg-linear-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-2xl">
                         🧠
                     </div>
                     <div>
@@ -32,7 +32,7 @@ export function Header({ isConnected, usuario, personalidad, onPersonalidadChang
     return (
         <header className="flex justify-between items-center mb-6 p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
             <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-2xl">
+                <div className="w-12 h-12 bg-linear-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-2xl">
                     🧠
                 </div>
                 <div>

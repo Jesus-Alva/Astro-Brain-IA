@@ -48,16 +48,16 @@ export function ExportImport({ usuario }: ExportImportProps) {
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 shadow-sm">
       <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
-        💾 Exportar / Importar
+        <span className="sidebar-title-icon" title="Exportar e importar conocimiento">💾</span> <span className="sidebar-label">Exportar / Importar</span>
       </h3>
       
-      <div className="space-y-2">
+      <div className="sidebar-detail space-y-2">
         <button
           onClick={handleExportar}
           disabled={exportando}
           className="w-full text-left px-3 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-sm transition-colors disabled:opacity-50"
         >
-          {exportando ? '⏳ Exportando...' : '📤 Exportar conocimiento'}
+          {exportando ? '⏳' : '📤'} <span className="sidebar-label">{exportando ? 'Exportando...' : 'Exportar conocimiento'}</span>
         </button>
         
         <button
@@ -65,7 +65,7 @@ export function ExportImport({ usuario }: ExportImportProps) {
           disabled={importando}
           className="w-full text-left px-3 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-sm transition-colors disabled:opacity-50"
         >
-          {importando ? '⏳ Importando...' : '📥 Importar conocimiento'}
+          {importando ? '⏳' : '📥'} <span className="sidebar-label">{importando ? 'Importando...' : 'Importar conocimiento'}</span>
         </button>
         
         <input
@@ -77,7 +77,7 @@ export function ExportImport({ usuario }: ExportImportProps) {
         />
         
         {resultado && (
-          <div className="text-xs text-gray-600 dark:text-gray-400 mt-2 p-2 bg-gray-50 dark:bg-gray-700/50 rounded">
+          <div className="sidebar-detail text-xs text-gray-600 dark:text-gray-400 mt-2 p-2 bg-gray-50 dark:bg-gray-700/50 rounded">
             {resultado}
           </div>
         )}

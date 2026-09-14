@@ -24,17 +24,17 @@ export function StatsDashboard() {
         className="w-full p-4 flex justify-between items-center hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors"
       >
         <div className="flex items-center gap-2">
-          <span className="text-xl">📊</span>
-          <span className="font-semibold text-gray-900 dark:text-white">Estadísticas</span>
-          <span className="text-xs bg-purple-500/20 text-purple-600 dark:text-purple-300 px-2 py-1 rounded">
+          <span className="sidebar-title-icon text-xl" title="Estadísticas">📊</span>
+          <span className="sidebar-label font-semibold text-gray-900 dark:text-white">Estadísticas</span>
+          <span className="sidebar-detail text-xs bg-purple-500/20 text-purple-600 dark:text-purple-300 px-2 py-1 rounded">
             {stats.largo_plazo.total_items} items
           </span>
         </div>
-        <span className="text-gray-500 dark:text-gray-400">{expandido ? '▼' : '▶'}</span>
+        <span className="sidebar-detail text-gray-500 dark:text-gray-400">{expandido ? '▼' : '▶'}</span>
       </button>
 
       {expandido && (
-        <div className="p-4 border-t border-gray-200 dark:border-gray-700 space-y-4">
+        <div className="sidebar-detail p-4 border-t border-gray-200 dark:border-gray-700 space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
               <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">💭 Corto Plazo</div>

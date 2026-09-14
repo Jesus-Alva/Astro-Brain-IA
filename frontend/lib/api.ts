@@ -1,6 +1,7 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://10.110.164.138:8000';
 
 export interface Message {
+  id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
@@ -12,6 +13,20 @@ export interface ChatResponse {
   usuario: string;
   personalidad: string;
   timestamp: string;
+  conversation_id: string;
+  conversation_title: string;
+}
+
+export interface ConversationSummary {
+  id: string;
+  titulo: string;
+  creada: string;
+  actualizada: string;
+  total_mensajes: number;
+}
+
+export interface Conversation extends ConversationSummary {
+  mensajes: Message[];
 }
 
 export interface FeedbackResponse {
@@ -292,13 +307,11 @@ export function eliminarToken() {
 async function fetchConAuth(url: string, options: RequestInit = {}) {
   const token = obtenerToken();
   
-  const headers = {
-    'Content-Type': 'application/json',
-    ...options.headers,
-  };
+  const headers = new Headers(options.headers);
+  headers.set('Content-Type', 'application/json');
   
   if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+    headers.set('Authorization', `Bearer ${token}`);
   }
   
   const response = await fetch(url, { ...options, headers });
@@ -379,13 +392,50 @@ export function logout() {
 export async function enviarMensaje(
   mensaje: string,
   usuario: string,
-  personalidad: string = 'amigable'
+  personalidad: string = 'amigable',
+  conversationId?: string
 ): Promise<ChatResponse> {
   const response = await fetchConAuth(`${API_URL}/chat`, {
     method: 'POST',
-    body: JSON.stringify({ mensaje, usuario, personalidad }),
+    body: JSON.stringify({ mensaje, usuario, personalidad, conversation_id: conversationId }),
   });
   
+  if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
+  return await response.json();
+}
+
+export async function listarConversaciones(): Promise<ConversationSummary[]> {
+  const response = await fetchConAuth(`${API_URL}/conversaciones`);
+  if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
+  return (await response.json()).conversaciones;
+}
+
+export async function crearConversacion(titulo = 'Nueva conversación'): Promise<Conversation> {
+  const response = await fetchConAuth(`${API_URL}/conversaciones`, {
+    method: 'POST',
+    body: JSON.stringify({ titulo }),
+  });
+  if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
+  return await response.json();
+}
+
+export async function obtenerConversacion(id: string): Promise<Conversation> {
+  const response = await fetchConAuth(`${API_URL}/conversaciones/${id}`);
+  if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
+  return await response.json();
+}
+
+export async function renombrarConversacion(id: string, titulo: string): Promise<ConversationSummary> {
+  const response = await fetchConAuth(`${API_URL}/conversaciones/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ titulo }),
+  });
+  if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
+  return await response.json();
+}
+
+export async function eliminarConversacion(id: string) {
+  const response = await fetchConAuth(`${API_URL}/conversaciones/${id}`, { method: 'DELETE' });
   if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
   return await response.json();
 }

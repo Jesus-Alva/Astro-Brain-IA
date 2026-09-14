@@ -21,6 +21,7 @@ import uvicorn
 from ia_core import IACore
 from usuario import Usuario
 from utils import Utils
+from conversaciones import GestorConversaciones
 
 # Inicializar
 app = FastAPI(title="Astro-IA API", version="3.0")
@@ -44,6 +45,18 @@ class MensajeRequest(BaseModel):
     mensaje: str
     usuario: Optional[str] = "anonimo"
     personalidad: Optional[str] = "amigable"
+    conversation_id: Optional[str] = None
+
+
+class ConversacionCreate(BaseModel):
+    titulo: Optional[str] = "Nueva conversación"
+
+
+class ConversacionUpdate(BaseModel):
+    titulo: str
+
+
+gestor_conversaciones = GestorConversaciones()
 
 
 class FeedbackRequest(BaseModel):
@@ -136,17 +149,94 @@ def chat(request: MensajeRequest, usuario: dict = Depends(obtener_usuario_actual
         ia.set_usuario(usuario_id)
         ia.personalidad = request.personalidad
 
+        conversacion = (
+            gestor_conversaciones.obtener(usuario_id, request.conversation_id)
+            if request.conversation_id
+            else None
+        )
+        if request.conversation_id and not conversacion:
+            raise HTTPException(status_code=404, detail="Conversación no encontrada")
+        if not conversacion:
+            conversacion = gestor_conversaciones.crear(usuario_id)
+
+        ia.historial_conversacion = conversacion.get("mensajes", []).copy()
+
         respuesta = ia.pensar(request.mensaje)
+        timestamp = Utils.formatear_fecha()
+        gestor_conversaciones.guardar_mensaje(
+            usuario_id, conversacion["id"], "user", request.mensaje
+        )
+        gestor_conversaciones.guardar_mensaje(
+            usuario_id, conversacion["id"], "assistant", respuesta, timestamp
+        )
+        conversacion_actualizada = gestor_conversaciones.obtener(
+            usuario_id, conversacion["id"]
+        )
 
         return {
             "mensaje": request.mensaje,
             "respuesta": respuesta,
             "usuario": request.usuario,
             "personalidad": ia.personalidad,
-            "timestamp": Utils.formatear_fecha(),
+            "timestamp": timestamp,
+            "conversation_id": conversacion["id"],
+            "conversation_title": conversacion_actualizada["titulo"],
         }
     except Exception as e:
+        if isinstance(e, HTTPException):
+            raise
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/conversaciones")
+def listar_conversaciones(usuario: dict = Depends(obtener_usuario_actual)):
+    return {"conversaciones": gestor_conversaciones.listar(usuario["nombre"])}
+
+
+@app.post("/conversaciones")
+def crear_conversacion(
+    request: ConversacionCreate,
+    usuario: dict = Depends(obtener_usuario_actual),
+):
+    return gestor_conversaciones.crear(usuario["nombre"], request.titulo or "Nueva conversación")
+
+
+@app.get("/conversaciones/{conversacion_id}")
+def obtener_conversacion(
+    conversacion_id: str,
+    usuario: dict = Depends(obtener_usuario_actual),
+):
+    conversacion = gestor_conversaciones.obtener(usuario["nombre"], conversacion_id)
+    if not conversacion:
+        raise HTTPException(status_code=404, detail="Conversación no encontrada")
+    return conversacion
+
+
+@app.patch("/conversaciones/{conversacion_id}")
+def renombrar_conversacion(
+    conversacion_id: str,
+    request: ConversacionUpdate,
+    usuario: dict = Depends(obtener_usuario_actual),
+):
+    try:
+        conversacion = gestor_conversaciones.renombrar(
+            usuario["nombre"], conversacion_id, request.titulo
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+    if not conversacion:
+        raise HTTPException(status_code=404, detail="Conversación no encontrada")
+    return conversacion
+
+
+@app.delete("/conversaciones/{conversacion_id}")
+def eliminar_conversacion(
+    conversacion_id: str,
+    usuario: dict = Depends(obtener_usuario_actual),
+):
+    if not gestor_conversaciones.eliminar(usuario["nombre"], conversacion_id):
+        raise HTTPException(status_code=404, detail="Conversación no encontrada")
+    return {"eliminada": True, "conversation_id": conversacion_id}
 
 
 @app.post("/feedback")
