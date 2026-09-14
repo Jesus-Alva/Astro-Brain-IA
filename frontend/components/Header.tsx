@@ -7,9 +7,10 @@ interface HeaderProps {
     usuario: string;
     personalidad: string;
     onPersonalidadChange: (personalidad: string) => void;
+    onLogout: () => void;
 }
 
-export function Header({ isConnected, usuario, personalidad, onPersonalidadChange }: HeaderProps) {
+export function Header({ isConnected, usuario, personalidad, onPersonalidadChange, onLogout }: HeaderProps) {
     const { tema, toggleTema, montado } = useTheme();
 
     // Evitar hidratación incorrecta
@@ -65,6 +66,13 @@ export function Header({ isConnected, usuario, personalidad, onPersonalidadChang
                     title={tema === 'oscuro' ? 'Cambiar a claro' : 'Cambiar a oscuro'}
                 >
                     {tema === 'oscuro' ? '☀️' : '🌙'}
+                </button>
+                <button
+                    onClick={onLogout}
+                    className="p-2 bg-red-600 hover:bg-red-700 rounded-lg transition-colors text-white"
+                    title="Cerrar sesión"
+                    >
+                    🚪
                 </button>
             </div>
         </header>

@@ -1,4 +1,5 @@
 from fastapi import (
+    Depends,
     FastAPI,
     WebSocket,
     WebSocketDisconnect,
@@ -11,8 +12,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict
 from datetime import datetime
+from auth import AuthManager, obtener_usuario_actual
+from pydantic import BaseModel
 import json
 import uvicorn
+
 
 from ia_core import IACore
 from usuario import Usuario
@@ -126,13 +130,10 @@ def root():
 
 
 @app.post("/chat")
-def chat(request: MensajeRequest):
+def chat(request: MensajeRequest, usuario: dict = Depends(obtener_usuario_actual)):
     try:
-        if request.usuario != "anonimo":
-            perfil = gestor_usuarios.cargar_usuario(request.usuario)
-            if perfil:
-                ia.usuario_actual = perfil
-
+        usuario_id = usuario.get("nombre")
+        ia.set_usuario(usuario_id)
         ia.personalidad = request.personalidad
 
         respuesta = ia.pensar(request.mensaje)
@@ -149,13 +150,13 @@ def chat(request: MensajeRequest):
 
 
 @app.post("/feedback")
-def feedback(request: FeedbackRequest):
+def feedback(request: FeedbackRequest, usuario: dict = Depends(obtener_usuario_actual)):
     try:
         return feedback_manager.registrar_feedback(
             mensaje=request.mensaje,
             respuesta=request.respuesta,
             es_positivo=request.es_positivo,
-            usuario=request.usuario or "anonimo",
+            usuario=usuario["nombre"],
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -180,8 +181,9 @@ def buscar(consulta: str, n_resultados: int = 5):
 
 
 @app.get("/estadisticas")
-def estadisticas():
+def estadisticas(usuario: dict = Depends(obtener_usuario_actual)):
     try:
+        ia.set_usuario(usuario["nombre"])
         stats = ia.memoria.obtener_estadisticas()
         return stats
     except Exception as e:
@@ -256,25 +258,34 @@ def aprender_manual():
 
 
 @app.get("/memoria/estadisticas")
-def estadisticas_memoria_dual():
+def estadisticas_memoria_dual(usuario: dict = Depends(obtener_usuario_actual)):
     """Estadísticas de ambas memorias (corto y largo plazo)"""
     try:
+        ia.set_usuario(usuario["nombre"])
         return ia.memoria.obtener_estadisticas()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/memoria/consolidar")
-def consolidar_memoria(forzar: bool = False):
+def consolidar_memoria(
+    forzar: bool = False, usuario: dict = Depends(obtener_usuario_actual)
+):
     """Consolida memoria de corto a largo plazo"""
     try:
+        ia.set_usuario(usuario["nombre"])
         return ia.consolidar_memoria(forzar=forzar)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/memoria/olvidar")
-def olvidar_memoria(criterio: str, valor: str, dry_run: bool = True):
+def olvidar_memoria(
+    criterio: str,
+    valor: str,
+    dry_run: bool = True,
+    usuario: dict = Depends(obtener_usuario_actual),
+):
     """
     Olvido selectivo de información.
 
@@ -294,24 +305,27 @@ def olvidar_memoria(criterio: str, valor: str, dry_run: bool = True):
         else:
             valor_conv = valor
 
+        ia.set_usuario(usuario["nombre"])
         return ia.olvidar(criterio, valor_conv, dry_run=dry_run)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/memoria/resumen-sesion")
-def resumen_sesion():
+def resumen_sesion(usuario: dict = Depends(obtener_usuario_actual)):
     """Resumen de la sesión actual"""
     try:
+        ia.set_usuario(usuario["nombre"])
         return ia.resumen_sesion()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/memoria/corto-plazo")
-def ver_memoria_corto_plazo():
+def ver_memoria_corto_plazo(usuario: dict = Depends(obtener_usuario_actual)):
     """Ver items en memoria de corto plazo"""
     try:
+        ia.set_usuario(usuario["nombre"])
         return {
             "sesion_id": ia.memoria.corto_plazo.sesion_id,
             "items": ia.memoria.corto_plazo.items,
@@ -322,22 +336,25 @@ def ver_memoria_corto_plazo():
 
 
 @app.get("/memoria/contexto")
-def ver_contexto_actual(consulta: str = "general"):
+def ver_contexto_actual(
+    consulta: str = "general", usuario: dict = Depends(obtener_usuario_actual)
+):
     """Ver el contexto que la IA usaría para una consulta"""
     try:
+        ia.set_usuario(usuario["nombre"])
         return ia.memoria.obtener_contexto_completo(consulta)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/usuarios")
-def listar_usuarios():
-    """Lista todos los usuarios disponibles"""
-    try:
-        usuarios = gestor_usuarios.listar_usuarios()
-        return {"usuarios": usuarios, "total": len(usuarios)}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+# @app.get("/usuarios")
+# def listar_usuarios():
+#     """Lista todos los usuarios disponibles"""
+#     try:
+#         usuarios = gestor_usuarios.listar_usuarios()
+#         return {"usuarios": usuarios, "total": len(usuarios)}
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=str(e))
 
 
 # ============================================
@@ -527,24 +544,6 @@ def actualizar_preferencias(request: PreferenciasRequest):
 class CambiarUsuarioRequest(BaseModel):
     usuario: str
 
-
-@app.post("/usuario/cambiar")
-def cambiar_usuario(request: CambiarUsuarioRequest):
-    """
-    ✅ CAMBIA EL USUARIO ACTIVO.
-    Esto aísla el conocimiento y la memoria.
-    """
-    try:
-        ia.set_usuario(request.usuario)
-        return {
-            "usuario": request.usuario,
-            "cambiado": True,
-            "estadisticas": ia.memoria.obtener_estadisticas(),
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @app.get("/usuario/actual")
 def usuario_actual():
     """Obtiene el usuario actual"""
@@ -585,3 +584,99 @@ def verificar_aislamiento(usuario1: str, usuario2: str):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================
+#  ENDPOINTS DE AUTENTICACIÓN
+# ============================================
+
+# Instancia del gestor de autenticación
+auth_manager = AuthManager(directorio="conocimiento/")
+
+
+class RegistroRequest(BaseModel):
+    nombre: str
+    password: str
+
+
+class LoginRequest(BaseModel):
+    nombre: str
+    password: str
+
+
+class CambiarPasswordRequest(BaseModel):
+    password_actual: str
+    password_nueva: str
+
+
+@app.post("/auth/registro")
+def registro(request: RegistroRequest):
+    """
+    Registra un nuevo usuario.
+
+    Ejemplo:
+        POST /auth/registro
+        {
+            "nombre": "jesus",
+            "password": "mi_password_segura"
+        }
+    """
+    resultado = auth_manager.registrar(request.nombre, request.password)
+
+    if not resultado["exito"]:
+        raise HTTPException(status_code=400, detail=resultado["error"])
+
+    return resultado
+
+
+@app.post("/auth/login")
+def login(request: LoginRequest):
+    """
+    Inicia sesión con un usuario existente.
+
+    Ejemplo:
+        POST /auth/login
+        {
+            "nombre": "jesus",
+            "password": "mi_password_segura"
+        }
+    """
+    resultado = auth_manager.login(request.nombre, request.password)
+
+    if not resultado["exito"]:
+        raise HTTPException(status_code=401, detail=resultado["error"])
+
+    return resultado
+
+
+@app.get("/auth/verificar")
+def verificar_sesion(usuario: dict = Depends(obtener_usuario_actual)):
+    """
+    Verifica que el token sea válido.
+    Útil para comprobar si la sesión sigue activa.
+    """
+    return {"valido": True, "usuario": usuario}
+
+
+@app.post("/auth/cambiar-password")
+def cambiar_password(
+    request: CambiarPasswordRequest, usuario: dict = Depends(obtener_usuario_actual)
+):
+    """Cambia la contraseña del usuario autenticado"""
+    resultado = auth_manager.cambiar_password(
+        usuario["nombre"], request.password_actual, request.password_nueva
+    )
+
+    if not resultado["exito"]:
+        raise HTTPException(status_code=400, detail=resultado["error"])
+
+    return resultado
+
+
+@app.get("/auth/usuarios")
+def listar_usuarios():
+    """
+    Lista usuarios públicos (solo nombres).
+    NO expone información sensible.
+    """
+    return {"usuarios": auth_manager.listar_usuarios_publicos()}

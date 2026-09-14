@@ -5,71 +5,79 @@ import {
   enviarMensaje,
   enviarFeedback,
   verificarBackend,
-  cambiarUsuario,
+  verificarSesion,
+  logout,
+  obtenerToken,
 } from '@/lib/api';
 import { Message } from '@/types';
 import { Header } from '@/components/Header';
 import { StatsDashboard } from '@/components/StatsDashboard';
 import { MessageBubble } from '@/components/MessageBubble';
-import { UserSelector } from '@/components/UserSelector';
 import { ExportImport } from '@/components/ExportImport';
 import { FeedbackStats } from '@/components/FeedbackStats';
-
-function generarId(): string {
-  if (typeof globalThis.crypto?.randomUUID === 'function') {
-    return globalThis.crypto.randomUUID();
-  }
-
-  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
+import { Login } from '@/components/Login';
 
 export default function Home() {
+  const [autenticado, setAutenticado] = useState(false);
+  const [verificando, setVerificando] = useState(true);
+  const [usuario, setUsuario] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [personalidad, setPersonalidad] = useState('amigable');
-  const [usuario, setUsuario] = useState('anonimo');
   const [sidebarAbierto, setSidebarAbierto] = useState(true);
-  const [feedbackRefresh, setFeedbackRefresh] = useState(0); // ← NUEVO: forzar refresco
+  const [feedbackRefresh, setFeedbackRefresh] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Verificar conexión
+  // Verificar sesión al cargar
   useEffect(() => {
+    const verificar = async () => {
+      const valido = await verificarSesion();
+      const usuarioGuardado = localStorage.getItem('usuario');
+
+      if (valido && usuarioGuardado) {
+        setUsuario(usuarioGuardado);
+        setAutenticado(true);
+      } else {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('usuario');
+      }
+
+      setVerificando(false);
+    };
+
+    verificar();
+  }, []);
+
+  // Verificar backend
+  useEffect(() => {
+    if (!autenticado) return;
+
     const checkBackend = async () => {
-      console.log('Verificando conexión con el backend...');
       const connected = await verificarBackend();
       setIsConnected(connected);
     };
     checkBackend();
     const interval = setInterval(checkBackend, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [autenticado]);
 
   // Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Cargar usuario guardado
-  useEffect(() => {
-    const usuarioGuardado = localStorage.getItem('usuario') || 'anonimo';
-    setUsuario(usuarioGuardado);
+  const handleLoginExitoso = (nombre: string) => {
+    setUsuario(nombre);
+    setAutenticado(true);
+  };
 
-    cambiarUsuario(usuarioGuardado).catch(console.log)
-  }, []);
-
-  const handleUsuarioChange = async (nuevoUsuario: string) => {
-    try {
-      await cambiarUsuario(nuevoUsuario);
-      setUsuario(nuevoUsuario);
-      localStorage.setItem('usuario', nuevoUsuario);
-      setMessages([]);
-
-      console.log(`Usuario cambiado a: ${nuevoUsuario}`);
-    } catch (error) {
-      console.error('Error al cambiar el usuario:', error);
-    }
+  const handleLogout = () => {
+    logout();
+    setAutenticado(false);
+    setUsuario('');
+    setMessages([]);
   };
 
   const handleSubmit = async (e?: React.FormEvent) => {
@@ -77,7 +85,7 @@ export default function Home() {
     if (!input.trim() || isLoading) return;
 
     const userMessage: Message = {
-      id: generarId(),
+      id: crypto.randomUUID(),
       role: 'user',
       content: input,
       timestamp: new Date().toISOString(),
@@ -92,7 +100,7 @@ export default function Home() {
       const response = await enviarMensaje(mensajeActual, usuario, personalidad);
 
       const assistantMessage: Message = {
-        id: generarId(),
+        id: crypto.randomUUID(),
         role: 'assistant',
         content: response.respuesta,
         timestamp: response.timestamp || new Date().toISOString(),
@@ -102,7 +110,7 @@ export default function Home() {
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (error) {
       const errorMessage: Message = {
-        id: generarId(),
+        id: crypto.randomUUID(),
         role: 'assistant',
         content: '❌ Error al conectar con el backend.',
         timestamp: new Date().toISOString(),
@@ -113,39 +121,25 @@ export default function Home() {
     }
   };
 
-  // ✅ FEEDBACK MEJORADO
   const handleFeedback = useCallback(
     async (messageId: string, esPositivo: boolean) => {
-      // Buscar el mensaje y el anterior
       const messageIndex = messages.findIndex((m) => m.id === messageId);
-      if (messageIndex === -1 || messageIndex === 0) {
-        console.warn('No se encontró el mensaje o es el primero');
-        return;
-      }
+      if (messageIndex === -1 || messageIndex === 0) return;
 
       const mensajeUsuario = messages[messageIndex - 1]?.content || '';
       const respuestaIA = messages[messageIndex].content;
 
-      // ✅ ACTUALIZAR UI PRIMERO (optimistic update)
       setMessages((prev) =>
         prev.map((m) =>
           m.id === messageId ? { ...m, feedback: esPositivo } : m
         )
       );
+      setFeedbackRefresh((prev) => prev + 1);
 
-      // ✅ ENVIAR AL BACKEND
       try {
-        const response = await enviarFeedback(
-          mensajeUsuario,
-          respuestaIA,
-          esPositivo,
-          usuario
-        );
-        console.log('✅ Feedback enviado:', response);
-        setFeedbackRefresh((prev) => prev + 1);
+        await enviarFeedback(mensajeUsuario, respuestaIA, esPositivo, usuario);
       } catch (error) {
-        console.error('❌ Error al enviar feedback:', error);
-        // Revertir si falla
+        console.error('Error al enviar feedback:', error);
         setMessages((prev) =>
           prev.map((m) =>
             m.id === messageId ? { ...m, feedback: null } : m
@@ -176,6 +170,24 @@ export default function Home() {
     URL.revokeObjectURL(url);
   };
 
+  // Loading inicial
+  if (verificando) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-900">
+        <div className="text-white text-center">
+          <div className="text-6xl mb-4 animate-pulse">🧠</div>
+          <p className="text-gray-400">Verificando sesión...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Sin autenticar → mostrar login
+  if (!autenticado) {
+    return <Login onLoginExitoso={handleLoginExitoso} />;
+  }
+
+  // Autenticado → mostrar chat
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white transition-colors duration-300">
       <div className="container mx-auto max-w-7xl px-4 py-6">
@@ -184,6 +196,7 @@ export default function Home() {
           usuario={usuario}
           personalidad={personalidad}
           onPersonalidadChange={setPersonalidad}
+          onLogout={handleLogout}
         />
 
         <div className="flex gap-6">
@@ -192,16 +205,6 @@ export default function Home() {
               } transition-all duration-300 overflow-hidden`}
           >
             <div className="space-y-4">
-              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 shadow-sm">
-                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
-                  👤 Usuario
-                </h3>
-                <UserSelector
-                  usuarioActual={usuario}
-                  onUsuarioChange={handleUsuarioChange}
-                />
-              </div>
-
               <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 shadow-sm">
                 <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
                   🛠️ Acciones
@@ -227,7 +230,6 @@ export default function Home() {
 
               <ExportImport usuario={usuario} />
 
-              {/* ✅ Pasar key para forzar refresco */}
               <FeedbackStats key={feedbackRefresh} />
             </div>
           </aside>
@@ -246,7 +248,7 @@ export default function Home() {
                   <div className="flex flex-col items-center justify-center h-full text-gray-400 dark:text-gray-500">
                     <div className="text-6xl mb-4">🧠</div>
                     <p className="text-lg font-semibold text-gray-700 dark:text-gray-300">
-                      ¡Hola {usuario !== 'anonimo' ? usuario : ''}!
+                      ¡Hola {usuario}!
                     </p>
                     <p className="text-sm mt-2">
                       {isConnected
@@ -256,7 +258,7 @@ export default function Home() {
                   </div>
                 )}
 
-                {messages.map((msg, index) => (
+                {messages.map((msg) => (
                   <MessageBubble
                     key={msg.id}
                     message={msg}

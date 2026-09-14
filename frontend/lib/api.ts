@@ -20,42 +20,6 @@ export interface FeedbackResponse {
   timestamp: string;
 }
 
-export async function enviarMensaje(
-  mensaje: string,
-  usuario: string = 'anonimo',
-  personalidad: string = 'amigable'
-): Promise<ChatResponse> {
-  const response = await fetch(`${API_URL}/chat`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mensaje, usuario, personalidad }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Error HTTP: ${response.status}`);
-  }
-
-  return await response.json();
-}
-
-export async function enviarFeedback(
-  mensaje: string,
-  respuesta: string,
-  esPositivo: boolean,
-  usuario: string = 'anonimo'
-): Promise<FeedbackResponse> {
-  const response = await fetch(`${API_URL}/feedback`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mensaje, respuesta, es_positivo: esPositivo, usuario }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Error HTTP: ${response.status}`);
-  }
-
-  return await response.json();
-}
 
 export async function verificarBackend(): Promise<boolean> {
   try {
@@ -148,12 +112,6 @@ export interface ResumenSesion {
   categorias_detectadas: string[];
   primer_mensaje: string;
   ultimo_mensaje: string;
-}
-
-export async function obtenerEstadisticasMemoria(): Promise<EstadisticasMemoria> {
-  const response = await fetch(`${API_URL}/memoria/estadisticas`);
-  if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
-  return await response.json();
 }
 
 export async function consolidarMemoria(forzar: boolean = true) {
@@ -306,6 +264,155 @@ export async function verificarAislamiento(usuario1: string, usuario2: string) {
   const response = await fetch(
     `${API_URL}/usuario/aislamiento/verificar?usuario1=${usuario1}&usuario2=${usuario2}`
   );
+  if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
+  return await response.json();
+}
+
+// ============================================
+//  GESTIÓN DEL TOKEN
+// ============================================
+
+export function guardarToken(token: string) {
+  localStorage.setItem('auth_token', token);
+}
+
+export function obtenerToken(): string | null {
+  return localStorage.getItem('auth_token');
+}
+
+export function eliminarToken() {
+  localStorage.removeItem('auth_token');
+  localStorage.removeItem('usuario');
+}
+
+// ============================================
+//  FUNCIÓN AUXILIAR PARA FETCH
+// ============================================
+
+async function fetchConAuth(url: string, options: RequestInit = {}) {
+  const token = obtenerToken();
+  
+  const headers = {
+    'Content-Type': 'application/json',
+    ...options.headers,
+  };
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  const response = await fetch(url, { ...options, headers });
+  
+  // Si el token expiró, redirigir al login
+  if (response.status === 401) {
+    eliminarToken();
+    window.location.reload();
+    throw new Error('Sesión expirada');
+  }
+  
+  return response;
+}
+
+// ============================================
+//  FUNCIONES DE AUTENTICACIÓN
+// ============================================
+
+export async function registrar(nombre: string, password: string) {
+  const response = await fetch(`${API_URL}/auth/registro`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nombre, password }),
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Error al registrar');
+  }
+  
+  const data = await response.json();
+  guardarToken(data.token);
+  localStorage.setItem('usuario', data.nombre);
+  return data;
+}
+
+export async function login(nombre: string, password: string) {
+  const response = await fetch(`${API_URL}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nombre, password }),
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Error al iniciar sesión');
+  }
+  
+  const data = await response.json();
+  guardarToken(data.token);
+  localStorage.setItem('usuario', data.nombre);
+  return data;
+}
+
+export async function verificarSesion() {
+  const token = obtenerToken();
+  if (!token) return false;
+  
+  try {
+    const response = await fetch(`${API_URL}/auth/verificar`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+export function logout() {
+  eliminarToken();
+}
+
+
+// ============================================
+//  ACTUALIZAR FUNCIONES EXISTENTES
+// ============================================
+
+export async function enviarMensaje(
+  mensaje: string,
+  usuario: string,
+  personalidad: string = 'amigable'
+): Promise<ChatResponse> {
+  const response = await fetchConAuth(`${API_URL}/chat`, {
+    method: 'POST',
+    body: JSON.stringify({ mensaje, usuario, personalidad }),
+  });
+  
+  if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
+  return await response.json();
+}
+
+export async function enviarFeedback(
+  mensaje: string,
+  respuesta: string,
+  esPositivo: boolean,
+  usuario: string
+): Promise<FeedbackResponse> {
+  const response = await fetchConAuth(`${API_URL}/feedback`, {
+    method: 'POST',
+    body: JSON.stringify({
+      mensaje,
+      respuesta,
+      es_positivo: esPositivo,
+      usuario,
+    }),
+  });
+  
+  if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
+  return await response.json();
+}
+
+// Y así con TODAS las funciones...
+export async function obtenerEstadisticasMemoria() {
+  const response = await fetchConAuth(`${API_URL}/memoria/estadisticas`);
   if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
   return await response.json();
 }
