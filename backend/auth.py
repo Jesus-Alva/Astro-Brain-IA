@@ -1,9 +1,10 @@
 # ============================================
 #  SISTEMA DE AUTENTICACIÓN
-#  Contraseñas + JWT Tokens
+#  Email + Password + JWT Tokens
 # ============================================
 
 import os
+import re
 import json
 import uuid
 from datetime import datetime, timedelta
@@ -20,60 +21,54 @@ from utils import Utils
 #  CONFIGURACIÓN
 # ============================================
 
-# Clave secreta para firmar tokens (CAMBIAR en producción)
 SECRET_KEY = os.getenv("SECRET_KEY", "cambiar_esta_clave_en_produccion_astro_ia")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_DAYS = 30
 
-# Contexto de hash de contraseñas
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-# Esquema HTTP Bearer
 security = HTTPBearer(auto_error=False)
 
+# Regex para validar email
+EMAIL_REGEX = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
+
 
 # ============================================
-#  FUNCIONES DE HASH
+#  UTILIDADES
 # ============================================
+
+
+def validar_email(email: str) -> bool:
+    """Valida el formato de un email"""
+    return bool(EMAIL_REGEX.match(email))
 
 
 def hash_password(password: str) -> str:
-    """Hashea una contraseña"""
     return pwd_context.hash(password)
 
 
 def verificar_password(password: str, hashed: str) -> bool:
-    """Verifica que una contraseña coincida con su hash"""
     try:
         return pwd_context.verify(password, hashed)
     except Exception:
         return False
 
 
-# ============================================
-#  FUNCIONES JWT
-# ============================================
-
-
-def crear_token(usuario_id: str, nombre: str) -> str:
-    """Crea un token JWT para un usuario"""
+def crear_token(usuario_id: str, nombre: str, email: str = "") -> str:
+    """Crea un token JWT"""
     expiracion = datetime.utcnow() + timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS)
-
     payload = {
         "sub": usuario_id,
         "nombre": nombre,
+        "email": email,
         "exp": expiracion,
         "iat": datetime.utcnow(),
     }
-
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
 def verificar_token(token: str) -> Optional[Dict]:
-    """Verifica un token JWT y devuelve el payload"""
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
+        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     except JWTError:
         return None
 
@@ -94,30 +89,23 @@ class AuthManager:
         os.makedirs(self.directorio, exist_ok=True)
 
     def _cargar_usuarios(self) -> Dict:
-        """Carga la base de datos de usuarios"""
         if os.path.exists(self.archivo_usuarios):
             try:
                 return Utils.cargar_json(self.archivo_usuarios)
             except:
-                return {"usuarios": {}}
-        return {"usuarios": {}}
+                return {"usuarios": {}, "emails": {}}
+        return {"usuarios": {}, "emails": {}}
 
     def _guardar_usuarios(self):
-        """Guarda la base de datos de usuarios"""
         Utils.guardar_json(self.usuarios, self.archivo_usuarios)
 
-    def registrar(self, nombre: str, password: str) -> Dict:
-        """
-        Registra un nuevo usuario.
+    # ==========================================
+    #  REGISTRO
+    # ==========================================
 
-        Returns:
-            {
-                "exito": True,
-                "usuario_id": "jesus_abc123",
-                "nombre": "jesus",
-                "token": "eyJhbGc...",
-                "mensaje": "Usuario registrado correctamente"
-            }
+    def registrar(self, nombre: str, email: str, password: str) -> Dict:
+        """
+        Registra un nuevo usuario con nombre, email y contraseña.
         """
         # Validaciones
         if not nombre or len(nombre) < 3:
@@ -126,18 +114,30 @@ class AuthManager:
                 "error": "El nombre debe tener al menos 3 caracteres",
             }
 
+        if not email or not validar_email(email):
+            return {"exito": False, "error": "El email no es válido"}
+
         if not password or len(password) < 6:
             return {
                 "exito": False,
                 "error": "La contraseña debe tener al menos 6 caracteres",
             }
 
-        # Normalizar nombre
+        # Normalizar
         nombre_normalizado = nombre.lower().strip()
+        email_normalizado = email.lower().strip()
 
-        # Verificar si ya existe
+        # Asegurar estructura
+        if "emails" not in self.usuarios:
+            self.usuarios["emails"] = {}
+
+        # Verificar nombre duplicado
         if nombre_normalizado in self.usuarios["usuarios"]:
-            return {"exito": False, "error": "El usuario ya existe"}
+            return {"exito": False, "error": "El nombre de usuario ya está en uso"}
+
+        # Verificar email duplicado
+        if email_normalizado in self.usuarios["emails"]:
+            return {"exito": False, "error": "El email ya está registrado"}
 
         # Crear usuario
         usuario_id = f"{nombre_normalizado}_{str(uuid.uuid4())[:8]}"
@@ -146,53 +146,74 @@ class AuthManager:
             "usuario_id": usuario_id,
             "nombre": nombre_normalizado,
             "nombre_original": nombre.strip(),
+            "email": email_normalizado,
             "password_hash": hash_password(password),
             "creado": datetime.now().isoformat(),
             "ultimo_login": datetime.now().isoformat(),
             "activo": True,
+            "metodo_registro": "email",
         }
 
+        # Guardar en ambos índices
         self.usuarios["usuarios"][nombre_normalizado] = usuario
+        self.usuarios["emails"][email_normalizado] = nombre_normalizado
         self._guardar_usuarios()
 
         # Crear token
-        token = crear_token(usuario_id, nombre_normalizado)
+        token = crear_token(usuario_id, nombre_normalizado, email_normalizado)
 
         return {
             "exito": True,
             "usuario_id": usuario_id,
             "nombre": nombre_normalizado,
             "nombre_original": nombre.strip(),
+            "email": email_normalizado,
             "token": token,
             "mensaje": "Usuario registrado correctamente",
         }
 
-    def login(self, nombre: str, password: str) -> Dict:
-        """
-        Inicia sesión con un usuario existente.
+    # ==========================================
+    #  LOGIN (con nombre o email)
+    # ==========================================
 
-        Returns:
-            {
-                "exito": True,
-                "usuario_id": "...",
-                "nombre": "...",
-                "token": "...",
-                "mensaje": "Sesión iniciada"
-            }
+    def login(self, identificador: str, password: str) -> Dict:
         """
-        nombre_normalizado = nombre.lower().strip()
+        Inicia sesión con nombre de usuario O email.
+
+        Args:
+            identificador: Puede ser el nombre de usuario o el email
+            password: La contraseña
+        """
+        if not identificador:
+            return {"exito": False, "error": "Usuario o email requerido"}
+
+        identificador = identificador.lower().strip()
+
+        # Determinar si es email o nombre
+        if "@" in identificador:
+            # Es email
+            if "emails" not in self.usuarios:
+                self.usuarios["emails"] = {}
+
+            if identificador not in self.usuarios["emails"]:
+                return {"exito": False, "error": "Email o contraseña incorrectos"}
+
+            nombre = self.usuarios["emails"][identificador]
+        else:
+            # Es nombre de usuario
+            nombre = identificador
 
         # Buscar usuario
-        if nombre_normalizado not in self.usuarios["usuarios"]:
+        if nombre not in self.usuarios["usuarios"]:
             return {"exito": False, "error": "Usuario o contraseña incorrectos"}
 
-        usuario = self.usuarios["usuarios"][nombre_normalizado]
+        usuario = self.usuarios["usuarios"][nombre]
 
         # Verificar contraseña
         if not verificar_password(password, usuario["password_hash"]):
             return {"exito": False, "error": "Usuario o contraseña incorrectos"}
 
-        # Verificar que esté activo
+        # Verificar activo
         if not usuario.get("activo", True):
             return {"exito": False, "error": "Usuario desactivado"}
 
@@ -201,19 +222,25 @@ class AuthManager:
         self._guardar_usuarios()
 
         # Crear token
-        token = crear_token(usuario["usuario_id"], nombre_normalizado)
+        token = crear_token(
+            usuario["usuario_id"], usuario["nombre"], usuario.get("email", "")
+        )
 
         return {
             "exito": True,
             "usuario_id": usuario["usuario_id"],
-            "nombre": nombre_normalizado,
-            "nombre_original": usuario.get("nombre_original", nombre_normalizado),
+            "nombre": usuario["nombre"],
+            "nombre_original": usuario.get("nombre_original", usuario["nombre"]),
+            "email": usuario.get("email", ""),
             "token": token,
             "mensaje": "Sesión iniciada correctamente",
         }
 
+    # ==========================================
+    #  VERIFICACIÓN
+    # ==========================================
+
     def verificar_sesion(self, token: str) -> Optional[Dict]:
-        """Verifica un token y devuelve el usuario"""
         payload = verificar_token(token)
         if not payload:
             return None
@@ -228,12 +255,16 @@ class AuthManager:
             "usuario_id": usuario["usuario_id"],
             "nombre": usuario["nombre"],
             "nombre_original": usuario.get("nombre_original", usuario["nombre"]),
+            "email": usuario.get("email", ""),
         }
+
+    # ==========================================
+    #  CAMBIAR PASSWORD
+    # ==========================================
 
     def cambiar_password(
         self, nombre: str, password_actual: str, password_nueva: str
     ) -> Dict:
-        """Cambia la contraseña de un usuario"""
         nombre_normalizado = nombre.lower().strip()
 
         if nombre_normalizado not in self.usuarios["usuarios"]:
@@ -241,28 +272,26 @@ class AuthManager:
 
         usuario = self.usuarios["usuarios"][nombre_normalizado]
 
-        # Verificar contraseña actual
         if not verificar_password(password_actual, usuario["password_hash"]):
             return {"exito": False, "error": "Contraseña actual incorrecta"}
 
-        # Validar nueva
         if len(password_nueva) < 6:
             return {
                 "exito": False,
                 "error": "La nueva contraseña debe tener al menos 6 caracteres",
             }
 
-        # Actualizar
         usuario["password_hash"] = hash_password(password_nueva)
         self._guardar_usuarios()
 
         return {"exito": True, "mensaje": "Contraseña actualizada"}
 
+    # ==========================================
+    #  UTILIDADES
+    # ==========================================
+
     def listar_usuarios_publicos(self) -> list:
-        """
-        Lista usuarios SIN información sensible.
-        Solo nombre para mostrar en el selector (opcional).
-        """
+        """Lista usuarios SIN información sensible"""
         return [
             {
                 "nombre": u["nombre"],
@@ -271,6 +300,17 @@ class AuthManager:
             for u in self.usuarios["usuarios"].values()
             if u.get("activo", True)
         ]
+
+    def obtener_usuario(self, nombre: str) -> Optional[Dict]:
+        """Obtiene un usuario por nombre (sin password_hash)"""
+        nombre_normalizado = nombre.lower().strip()
+
+        if nombre_normalizado not in self.usuarios["usuarios"]:
+            return None
+
+        usuario = self.usuarios["usuarios"][nombre_normalizado].copy()
+        usuario.pop("password_hash", None)  # No exponer el hash
+        return usuario
 
 
 # ============================================
@@ -281,10 +321,6 @@ class AuthManager:
 async def obtener_usuario_actual(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> Dict:
-    """
-    Dependencia que verifica el token JWT.
-    Se usa en endpoints protegidos.
-    """
     if not credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -305,4 +341,5 @@ async def obtener_usuario_actual(
     return {
         "usuario_id": payload.get("sub"),
         "nombre": payload.get("nombre"),
+        "email": payload.get("email", ""),
     }

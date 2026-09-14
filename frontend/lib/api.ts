@@ -1,5 +1,14 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://10.110.164.138:8000';
 
+export interface UsuarioAuth {
+  usuario_id: string;
+  nombre: string;
+  nombre_original: string;
+  email: string;
+  token: string;
+  mensaje: string;
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
@@ -297,25 +306,32 @@ export function eliminarToken() {
 //  FUNCIÓN AUXILIAR PARA FETCH
 // ============================================
 
-async function fetchConAuth(url: string, options: RequestInit = {}) {
+export async function fetchConAuth(url: string, options: RequestInit = {}) {
   const token = obtenerToken();
-  
-  const headers = new Headers(options.headers);
-  headers.set('Content-Type', 'application/json');
-  
+
+  const headers = new Headers(options.headers ?? {});
+
+  if (!(options.body instanceof FormData) && !headers.has('Content-Type')) {
+    const method = (options.method ?? 'GET').toUpperCase();
+    if (method !== 'GET' && options.body !== undefined) {
+      headers.set('Content-Type', 'application/json');
+    }
+  }
+
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
   }
-  
+
   const response = await fetch(url, { ...options, headers });
-  
-  // Si el token expiró, redirigir al login
+
   if (response.status === 401) {
     eliminarToken();
-    window.location.reload();
+    if (typeof window !== 'undefined') {
+      window.location.reload();
+    }
     throw new Error('Sesión expirada');
   }
-  
+
   return response;
 }
 
@@ -323,49 +339,64 @@ async function fetchConAuth(url: string, options: RequestInit = {}) {
 //  FUNCIONES DE AUTENTICACIÓN
 // ============================================
 
-export async function registrar(nombre: string, password: string) {
+export async function registrar(
+  nombre: string,
+  email: string,
+  password: string
+): Promise<UsuarioAuth> {
   const response = await fetch(`${API_URL}/auth/registro`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ nombre, password }),
+    body: JSON.stringify({ nombre, email, password }),
   });
-  
+
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(error.detail || 'Error al registrar');
+    throw new Error(error.detail || error.error || 'Error al registrar');
   }
-  
-  const data = await response.json();
+
+  const data: UsuarioAuth = await response.json();
   guardarToken(data.token);
   localStorage.setItem('usuario', data.nombre);
+  localStorage.setItem('email', data.email);
   return data;
 }
 
-export async function login(nombre: string, password: string) {
+export async function login(
+  identificador: string,
+  password: string
+): Promise<UsuarioAuth> {
   const response = await fetch(`${API_URL}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ nombre, password }),
+    body: JSON.stringify({ identificador, password }),
   });
-  
+
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(error.detail || 'Error al iniciar sesión');
+    throw new Error(error.detail || error.error || 'Error al iniciar sesión');
   }
-  
-  const data = await response.json();
+
+  const data: UsuarioAuth = await response.json();
   guardarToken(data.token);
   localStorage.setItem('usuario', data.nombre);
+  localStorage.setItem('email', data.email);
   return data;
+}
+
+export async function obtenerPerfil(): Promise<UsuarioAuth> {
+  const response = await fetchConAuth(`${API_URL}/auth/perfil`);
+  if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
+  return await response.json();
 }
 
 export async function verificarSesion() {
   const token = obtenerToken();
   if (!token) return false;
-  
+
   try {
     const response = await fetch(`${API_URL}/auth/verificar`, {
-      headers: { 'Authorization': `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${token}` },
     });
     return response.ok;
   } catch {
@@ -376,7 +407,6 @@ export async function verificarSesion() {
 export function logout() {
   eliminarToken();
 }
-
 
 // ============================================
 //  ACTUALIZAR FUNCIONES EXISTENTES

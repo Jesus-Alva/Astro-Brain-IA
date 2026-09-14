@@ -623,11 +623,12 @@ auth_manager = AuthManager(directorio="conocimiento/")
 
 class RegistroRequest(BaseModel):
     nombre: str
+    email: str
     password: str
 
 
 class LoginRequest(BaseModel):
-    nombre: str
+    identificador: str
     password: str
 
 
@@ -640,39 +641,44 @@ class CambiarPasswordRequest(BaseModel):
 def registro(request: RegistroRequest):
     """
     Registra un nuevo usuario.
-
+    
     Ejemplo:
         POST /auth/registro
         {
             "nombre": "jesus",
+            "email": "jesus@example.com",
             "password": "mi_password_segura"
         }
     """
-    resultado = auth_manager.registrar(request.nombre, request.password)
-
+    resultado = auth_manager.registrar(
+        request.nombre,
+        request.email,
+        request.password
+    )
+    
     if not resultado["exito"]:
         raise HTTPException(status_code=400, detail=resultado["error"])
-
+    
     return resultado
 
 
 @app.post("/auth/login")
 def login(request: LoginRequest):
     """
-    Inicia sesión con un usuario existente.
-
-    Ejemplo:
+    Inicia sesión con nombre de usuario O email.
+    
+    Ejemplos:
         POST /auth/login
-        {
-            "nombre": "jesus",
-            "password": "mi_password_segura"
-        }
+        {"identificador": "jesus", "password": "..."}
+        
+        POST /auth/login
+        {"identificador": "jesus@example.com", "password": "..."}
     """
-    resultado = auth_manager.login(request.nombre, request.password)
-
+    resultado = auth_manager.login(request.identificador, request.password)
+    
     if not resultado["exito"]:
         raise HTTPException(status_code=401, detail=resultado["error"])
-
+    
     return resultado
 
 
@@ -687,7 +693,8 @@ def verificar_sesion(usuario: dict = Depends(obtener_usuario_actual)):
 
 @app.post("/auth/cambiar-password")
 def cambiar_password(
-    request: CambiarPasswordRequest, usuario: dict = Depends(obtener_usuario_actual)
+    request: CambiarPasswordRequest, 
+    usuario: dict = Depends(obtener_usuario_actual)
 ):
     """Cambia la contraseña del usuario autenticado"""
     resultado = auth_manager.cambiar_password(
@@ -708,6 +715,13 @@ def listar_usuarios():
     """
     return {"usuarios": auth_manager.listar_usuarios_publicos()}
 
+@app.get("/auth/perfil")
+def obtener_perfil(usuario: dict = Depends(obtener_usuario_actual)):
+    """Obtiene el perfil del usuario autenticado"""
+    perfil = auth_manager.obtener_usuario(usuario["nombre"])
+    if not perfil:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    return perfil
 
 # ============================================
 #  ENDPOINTS DE CONVERSACIONES
