@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import toast from 'react-hot-toast';
 import {
   enviarMensaje,
   enviarFeedback,
@@ -23,6 +24,7 @@ import { MessageBubble } from '@/components/MessageBubble';
 import { ExportImport } from '@/components/ExportImport';
 import { FeedbackStats } from '@/components/FeedbackStats';
 import { Login } from '@/components/Login';
+import { ConfirmationAlert } from '@/components/ConfirmationAlert';
 
 export default function Home() {
   const [autenticado, setAutenticado] = useState(false);
@@ -39,7 +41,30 @@ export default function Home() {
   const [conversationId, setConversationId] = useState<string>();
   const [conversacionEditando, setConversacionEditando] = useState<string>();
   const [tituloEditado, setTituloEditado] = useState('');
+  const [conversacionPendienteEliminar, setConversacionPendienteEliminar] = useState<string>();
+  const [eliminandoConversacion, setEliminandoConversacion] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const cargarConversaciones = async () => {
+    try {
+      const disponibles = await listarConversaciones();
+      setConversaciones(disponibles);
+
+      if (disponibles[0]) {
+        const conversacion = await obtenerConversacion(disponibles[0].id);
+        setConversationId(conversacion.id);
+        setMessages(conversacion.mensajes);
+      } else {
+        const nueva = await crearConversacion();
+        setConversationId(nueva.id);
+        setConversaciones([nueva]);
+        setMessages([]);
+      }
+    } catch (error) {
+      console.error('Error al cargar conversaciones:', error);
+      toast.error('No se pudieron cargar tus conversaciones');
+    }
+  };
 
   // Verificar sesión al cargar
   useEffect(() => {
@@ -50,21 +75,7 @@ export default function Home() {
       if (valido && usuarioGuardado) {
         setUsuario(usuarioGuardado);
         setAutenticado(true);
-        try {
-          const disponibles = await listarConversaciones();
-          setConversaciones(disponibles);
-          if (disponibles[0]) {
-            const conversacion = await obtenerConversacion(disponibles[0].id);
-            setConversationId(conversacion.id);
-            setMessages(conversacion.mensajes);
-          } else {
-            const nueva = await crearConversacion();
-            setConversationId(nueva.id);
-            setConversaciones([nueva]);
-          }
-        } catch (error) {
-          console.error('Error al cargar conversaciones:', error);
-        }
+        await cargarConversaciones();
       } else {
         localStorage.removeItem('auth_token');
         localStorage.removeItem('usuario');
@@ -94,12 +105,16 @@ export default function Home() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleLoginExitoso = (nombre: string) => {
+  const handleLoginExitoso = async (nombre: string) => {
     setUsuario(nombre);
+    setVerificando(true);
+    await cargarConversaciones();
     setAutenticado(true);
+    setVerificando(false);
   };
 
   const handleLogout = () => {
+    toast.success('Sesión cerrada correctamente');
     logout();
     setAutenticado(false);
     setUsuario('');
@@ -215,17 +230,32 @@ export default function Home() {
     setTituloEditado('');
   };
 
-  const borrarConversacion = async (id: string) => {
-    if (!confirm('¿Eliminar esta conversación? Esta acción no se puede deshacer.')) return;
-    await eliminarConversacion(id);
-    const restantes = conversaciones.filter((conversacion) => conversacion.id !== id);
-    setConversaciones(restantes);
-    if (id === conversationId) {
-      if (restantes[0]) {
-        await seleccionarConversacion(restantes[0].id);
-      } else {
-        await nuevaConversacion();
+  const solicitarEliminarConversacion = (id: string) => {
+    setConversacionPendienteEliminar(id);
+  };
+
+  const borrarConversacion = async () => {
+    if (!conversacionPendienteEliminar) return;
+    const id = conversacionPendienteEliminar;
+    setEliminandoConversacion(true);
+    try {
+      await eliminarConversacion(id);
+      toast.success('Conversación eliminada');
+      const restantes = conversaciones.filter((conversacion) => conversacion.id !== id);
+      setConversaciones(restantes);
+      if (id === conversationId) {
+        if (restantes[0]) {
+          await seleccionarConversacion(restantes[0].id);
+        } else {
+          await nuevaConversacion();
+        }
       }
+      setConversacionPendienteEliminar(undefined);
+    } catch (error) {
+      console.error('Error al eliminar conversación:', error);
+      toast.error('No se pudo eliminar la conversación');
+    } finally {
+      setEliminandoConversacion(false);
     }
   };
 
@@ -362,7 +392,7 @@ export default function Home() {
                         ✏️
                       </button>
                       <button
-                        onClick={() => borrarConversacion(conversacion.id)}
+                        onClick={() => solicitarEliminarConversacion(conversacion.id)}
                         className="px-2 py-2 text-red-500 hover:text-red-700"
                         title="Eliminar conversación"
                       >
@@ -457,6 +487,15 @@ export default function Home() {
           </main>
         </div>
       </div>
+      <ConfirmationAlert
+        open={Boolean(conversacionPendienteEliminar)}
+        title="Eliminar conversación"
+        message="Esta conversación se eliminará permanentemente. Esta acción no se puede deshacer."
+        confirmLabel="Eliminar"
+        onConfirm={borrarConversacion}
+        onCancel={() => setConversacionPendienteEliminar(undefined)}
+        loading={eliminandoConversacion}
+      />
     </div>
   );
 }

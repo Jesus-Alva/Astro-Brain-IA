@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { Notifications } from '@/components/Notifications';
 
 export const metadata: Metadata = {
   title: 'Astro-IA - Tu IA Personal',
@@ -34,6 +35,7 @@ export default function RootLayout({
       </head>
       <body className="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white transition-colors duration-300">
         {children}
+        <Notifications />
       </body>
     </html>
   );
