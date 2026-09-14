@@ -625,6 +625,7 @@ class RegistroRequest(BaseModel):
     nombre: str
     email: str
     password: str
+    acepta_politicas: bool = True
 
 
 class LoginRequest(BaseModel):
@@ -641,24 +642,21 @@ class CambiarPasswordRequest(BaseModel):
 def registro(request: RegistroRequest):
     """
     Registra un nuevo usuario.
-    
+
     Ejemplo:
         POST /auth/registro
         {
             "nombre": "jesus",
             "email": "jesus@example.com",
-            "password": "mi_password_segura"
+            "password": "mi_password_segura",
+            request.acepta_politicas
         }
     """
-    resultado = auth_manager.registrar(
-        request.nombre,
-        request.email,
-        request.password
-    )
-    
+    resultado = auth_manager.registrar(request.nombre, request.email, request.password)
+
     if not resultado["exito"]:
         raise HTTPException(status_code=400, detail=resultado["error"])
-    
+
     return resultado
 
 
@@ -666,19 +664,19 @@ def registro(request: RegistroRequest):
 def login(request: LoginRequest):
     """
     Inicia sesión con nombre de usuario O email.
-    
+
     Ejemplos:
         POST /auth/login
         {"identificador": "jesus", "password": "..."}
-        
+
         POST /auth/login
         {"identificador": "jesus@example.com", "password": "..."}
     """
     resultado = auth_manager.login(request.identificador, request.password)
-    
+
     if not resultado["exito"]:
         raise HTTPException(status_code=401, detail=resultado["error"])
-    
+
     return resultado
 
 
@@ -693,8 +691,7 @@ def verificar_sesion(usuario: dict = Depends(obtener_usuario_actual)):
 
 @app.post("/auth/cambiar-password")
 def cambiar_password(
-    request: CambiarPasswordRequest, 
-    usuario: dict = Depends(obtener_usuario_actual)
+    request: CambiarPasswordRequest, usuario: dict = Depends(obtener_usuario_actual)
 ):
     """Cambia la contraseña del usuario autenticado"""
     resultado = auth_manager.cambiar_password(
@@ -715,6 +712,7 @@ def listar_usuarios():
     """
     return {"usuarios": auth_manager.listar_usuarios_publicos()}
 
+
 @app.get("/auth/perfil")
 def obtener_perfil(usuario: dict = Depends(obtener_usuario_actual)):
     """Obtiene el perfil del usuario autenticado"""
@@ -722,6 +720,28 @@ def obtener_perfil(usuario: dict = Depends(obtener_usuario_actual)):
     if not perfil:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     return perfil
+
+
+@app.get("/politicas/privacidad")
+def obtener_politicas():
+    """
+    Devuelve el texto de la política de privacidad.
+    Útil para aplicaciones móviles o externas.
+    """
+    return {
+        "version": "1.0.0",
+        "ultima_actualizacion": "2026-09-14",
+        "titulo": "Política de Privacidad de Astro-IA",
+        "url": "/politicas/privacidad",
+        "resumen": {
+            "vende_datos": False,
+            "comparte_terceros": False,
+            "almacenamiento_local": True,
+            "cookies_terceros": False,
+            "entrena_modelos": False,
+        },
+    }
+
 
 # ============================================
 #  ENDPOINTS DE CONVERSACIONES

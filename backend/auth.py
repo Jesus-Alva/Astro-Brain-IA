@@ -103,7 +103,10 @@ class AuthManager:
     #  REGISTRO
     # ==========================================
 
-    def registrar(self, nombre: str, email: str, password: str) -> Dict:
+    def registrar(self, nombre: str, 
+                  email: str, 
+                  password: str, 
+                  acepta_politicas: bool = True) -> Dict:
         """
         Registra un nuevo usuario con nombre, email y contraseña.
         """
@@ -122,6 +125,10 @@ class AuthManager:
                 "exito": False,
                 "error": "La contraseña debe tener al menos 6 caracteres",
             }
+
+        if not acepta_politicas:
+            return {"exito": False, 
+                    "error": "Debes aceptar las políticas de privacidad"}
 
         # Normalizar
         nombre_normalizado = nombre.lower().strip()
@@ -152,6 +159,12 @@ class AuthManager:
             "ultimo_login": datetime.now().isoformat(),
             "activo": True,
             "metodo_registro": "email",
+            "politicas": {
+                "aceptadas": True,
+                "version": "1.0.0",
+                "fecha_aceptacion": datetime.now().isoformat(),
+                "ip": None,  # Se puede añadir la IP si se desea
+            }
         }
 
         # Guardar en ambos índices

@@ -342,12 +342,13 @@ export async function fetchConAuth(url: string, options: RequestInit = {}) {
 export async function registrar(
   nombre: string,
   email: string,
-  password: string
+  password: string,
+  aceptaPoliticas: boolean = true 
 ): Promise<UsuarioAuth> {
   const response = await fetch(`${API_URL}/auth/registro`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ nombre, email, password }),
+    body: JSON.stringify({ nombre, email, password, acepta_politicas: aceptaPoliticas, }),
   });
 
   if (!response.ok) {
