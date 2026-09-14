@@ -45,18 +45,7 @@ class MensajeRequest(BaseModel):
     mensaje: str
     usuario: Optional[str] = "anonimo"
     personalidad: Optional[str] = "amigable"
-    conversation_id: Optional[str] = None
-
-
-class ConversacionCreate(BaseModel):
-    titulo: Optional[str] = "Nueva conversación"
-
-
-class ConversacionUpdate(BaseModel):
-    titulo: str
-
-
-gestor_conversaciones = GestorConversaciones()
+    conversacion_id: Optional[str] = None
 
 
 class FeedbackRequest(BaseModel):
@@ -145,98 +134,45 @@ def root():
 @app.post("/chat")
 def chat(request: MensajeRequest, usuario: dict = Depends(obtener_usuario_actual)):
     try:
-        usuario_id = usuario.get("nombre")
+        usuario_id = usuario["nombre"]
         ia.set_usuario(usuario_id)
         ia.personalidad = request.personalidad
 
-        conversacion = (
-            gestor_conversaciones.obtener(usuario_id, request.conversation_id)
-            if request.conversation_id
-            else None
+        # ✅ GESTIONAR CONVERSACIÓN
+        conv_id = request.conversacion_id
+
+        if not conv_id:
+            # Buscar la conversación más reciente o crear una nueva
+            convs = gestor_conv.listar_conversaciones(usuario_id)
+            if convs:
+                conv_id = convs[0]["id"]
+            else:
+                nueva = gestor_conv.crear_conversacion(usuario_id)
+                conv_id = nueva["id"]
+
+        # ✅ GUARDAR MENSAJE DEL USUARIO
+        gestor_conv.agregar_mensaje(
+            usuario=usuario_id, conv_id=conv_id, role="user", content=request.mensaje
         )
-        if request.conversation_id and not conversacion:
-            raise HTTPException(status_code=404, detail="Conversación no encontrada")
-        if not conversacion:
-            conversacion = gestor_conversaciones.crear(usuario_id)
 
-        ia.historial_conversacion = conversacion.get("mensajes", []).copy()
-
+        # Generar respuesta
         respuesta = ia.pensar(request.mensaje)
-        timestamp = Utils.formatear_fecha()
-        gestor_conversaciones.guardar_mensaje(
-            usuario_id, conversacion["id"], "user", request.mensaje
-        )
-        gestor_conversaciones.guardar_mensaje(
-            usuario_id, conversacion["id"], "assistant", respuesta, timestamp
-        )
-        conversacion_actualizada = gestor_conversaciones.obtener(
-            usuario_id, conversacion["id"]
+
+        # ✅ GUARDAR RESPUESTA DE LA IA
+        gestor_conv.agregar_mensaje(
+            usuario=usuario_id, conv_id=conv_id, role="assistant", content=respuesta
         )
 
         return {
             "mensaje": request.mensaje,
             "respuesta": respuesta,
-            "usuario": request.usuario,
+            "usuario": usuario_id,
             "personalidad": ia.personalidad,
-            "timestamp": timestamp,
-            "conversation_id": conversacion["id"],
-            "conversation_title": conversacion_actualizada["titulo"],
+            "conversacion_id": conv_id,  # ✅ NUEVO
+            "timestamp": Utils.formatear_fecha(),
         }
     except Exception as e:
-        if isinstance(e, HTTPException):
-            raise
         raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/conversaciones")
-def listar_conversaciones(usuario: dict = Depends(obtener_usuario_actual)):
-    return {"conversaciones": gestor_conversaciones.listar(usuario["nombre"])}
-
-
-@app.post("/conversaciones")
-def crear_conversacion(
-    request: ConversacionCreate,
-    usuario: dict = Depends(obtener_usuario_actual),
-):
-    return gestor_conversaciones.crear(usuario["nombre"], request.titulo or "Nueva conversación")
-
-
-@app.get("/conversaciones/{conversacion_id}")
-def obtener_conversacion(
-    conversacion_id: str,
-    usuario: dict = Depends(obtener_usuario_actual),
-):
-    conversacion = gestor_conversaciones.obtener(usuario["nombre"], conversacion_id)
-    if not conversacion:
-        raise HTTPException(status_code=404, detail="Conversación no encontrada")
-    return conversacion
-
-
-@app.patch("/conversaciones/{conversacion_id}")
-def renombrar_conversacion(
-    conversacion_id: str,
-    request: ConversacionUpdate,
-    usuario: dict = Depends(obtener_usuario_actual),
-):
-    try:
-        conversacion = gestor_conversaciones.renombrar(
-            usuario["nombre"], conversacion_id, request.titulo
-        )
-    except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error))
-    if not conversacion:
-        raise HTTPException(status_code=404, detail="Conversación no encontrada")
-    return conversacion
-
-
-@app.delete("/conversaciones/{conversacion_id}")
-def eliminar_conversacion(
-    conversacion_id: str,
-    usuario: dict = Depends(obtener_usuario_actual),
-):
-    if not gestor_conversaciones.eliminar(usuario["nombre"], conversacion_id):
-        raise HTTPException(status_code=404, detail="Conversación no encontrada")
-    return {"eliminada": True, "conversation_id": conversacion_id}
 
 
 @app.post("/feedback")
@@ -634,6 +570,7 @@ def actualizar_preferencias(request: PreferenciasRequest):
 class CambiarUsuarioRequest(BaseModel):
     usuario: str
 
+
 @app.get("/usuario/actual")
 def usuario_actual():
     """Obtiene el usuario actual"""
@@ -770,3 +707,203 @@ def listar_usuarios():
     NO expone información sensible.
     """
     return {"usuarios": auth_manager.listar_usuarios_publicos()}
+
+
+# ============================================
+#  ENDPOINTS DE CONVERSACIONES
+# ============================================
+
+# Instancia del gestor
+gestor_conv = GestorConversaciones(directorio="conocimiento/")
+
+
+class CrearConversacionRequest(BaseModel):
+    titulo: Optional[str] = None
+    personalidad: Optional[str] = "amigable"
+
+
+class ActualizarConversacionRequest(BaseModel):
+    titulo: Optional[str] = None
+    personalidad: Optional[str] = None
+    archivada: Optional[bool] = None
+    destacada: Optional[bool] = None
+
+
+class MensajeConversacionRequest(BaseModel):
+    role: str  # "user" o "assistant"
+    content: str
+    metadata: Optional[Dict] = None
+
+
+# --- Crear conversación ---
+
+
+@app.post("/conversaciones")
+def crear_conversacion(
+    request: CrearConversacionRequest, usuario: dict = Depends(obtener_usuario_actual)
+):
+    """Crea una nueva conversación"""
+    try:
+        conv = gestor_conv.crear_conversacion(
+            usuario=usuario["nombre"],
+            titulo=request.titulo,
+            personalidad=request.personalidad or "amigable",
+        )
+        return conv
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- Listar conversaciones ---
+
+
+@app.get("/conversaciones")
+def listar_conversaciones(
+    incluir_archivadas: bool = False, usuario: dict = Depends(obtener_usuario_actual)
+):
+    """Lista todas las conversaciones del usuario"""
+    try:
+        convs = gestor_conv.listar_conversaciones(
+            usuario=usuario["nombre"], incluir_archivadas=incluir_archivadas
+        )
+        return {
+            "usuario": usuario["nombre"],
+            "total": len(convs),
+            "conversaciones": convs,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- Obtener conversación específica ---
+
+
+@app.get("/conversaciones/{conv_id}")
+def obtener_conversacion(conv_id: str, usuario: dict = Depends(obtener_usuario_actual)):
+    """Obtiene una conversación completa con todos sus mensajes"""
+    try:
+        conv = gestor_conv.obtener_conversacion(usuario["nombre"], conv_id)
+        if not conv:
+            raise HTTPException(status_code=404, detail="Conversación no encontrada")
+        return conv
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- Actualizar conversación ---
+
+
+@app.put("/conversaciones/{conv_id}")
+def actualizar_conversacion(
+    conv_id: str,
+    request: ActualizarConversacionRequest,
+    usuario: dict = Depends(obtener_usuario_actual),
+):
+    """Actualiza los metadatos de una conversación"""
+    try:
+        cambios = {k: v for k, v in request.dict().items() if v is not None}
+        conv = gestor_conv.actualizar_conversacion(
+            usuario=usuario["nombre"], conv_id=conv_id, cambios=cambios
+        )
+        if not conv:
+            raise HTTPException(status_code=404, detail="Conversación no encontrada")
+        return conv
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- Eliminar conversación ---
+
+
+@app.delete("/conversaciones/{conv_id}")
+def eliminar_conversacion(
+    conv_id: str, usuario: dict = Depends(obtener_usuario_actual)
+):
+    """Elimina una conversación permanentemente"""
+    try:
+        exito = gestor_conv.eliminar_conversacion(usuario["nombre"], conv_id)
+        if not exito:
+            raise HTTPException(status_code=404, detail="Conversación no encontrada")
+        return {"eliminada": True, "conv_id": conv_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- Eliminar todas las conversaciones ---
+
+
+@app.delete("/conversaciones")
+def eliminar_todas_conversaciones(usuario: dict = Depends(obtener_usuario_actual)):
+    """Elimina TODAS las conversaciones del usuario"""
+    try:
+        eliminadas = gestor_conv.eliminar_todas_conversaciones(usuario["nombre"])
+        return {"eliminadas": eliminadas, "usuario": usuario["nombre"]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- Buscar conversaciones ---
+
+
+@app.get("/conversaciones/buscar/{termino}")
+def buscar_conversaciones(
+    termino: str, usuario: dict = Depends(obtener_usuario_actual)
+):
+    """Busca conversaciones por título o contenido"""
+    try:
+        resultados = gestor_conv.buscar_conversaciones(usuario["nombre"], termino)
+        return {"termino": termino, "total": len(resultados), "resultados": resultados}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- Estadísticas ---
+
+
+@app.get("/conversaciones/estadisticas/resumen")
+def estadisticas_conversaciones(usuario: dict = Depends(obtener_usuario_actual)):
+    """Obtiene estadísticas de las conversaciones"""
+    try:
+        return gestor_conv.obtener_estadisticas(usuario["nombre"])
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- Exportar conversación ---
+
+
+@app.get("/conversaciones/{conv_id}/exportar")
+def exportar_conversacion(
+    conv_id: str, usuario: dict = Depends(obtener_usuario_actual)
+):
+    """Exporta una conversación a JSON"""
+    try:
+        conv = gestor_conv.exportar_conversacion(usuario["nombre"], conv_id)
+        if not conv:
+            raise HTTPException(status_code=404, detail="Conversación no encontrada")
+        return conv
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- Importar conversación ---
+
+
+@app.post("/conversaciones/importar")
+def importar_conversacion(
+    conversacion: Dict, usuario: dict = Depends(obtener_usuario_actual)
+):
+    """Importa una conversación desde un JSON"""
+    try:
+        conv = gestor_conv.importar_conversacion(usuario["nombre"], conversacion)
+        return conv
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

@@ -7,22 +7,15 @@ export interface Message {
   timestamp: string;
 }
 
-export interface ChatResponse {
-  mensaje: string;
-  respuesta: string;
-  usuario: string;
-  personalidad: string;
-  timestamp: string;
-  conversation_id: string;
-  conversation_title: string;
-}
-
 export interface ConversationSummary {
   id: string;
   titulo: string;
   creada: string;
   actualizada: string;
+  personalidad?: string;
   total_mensajes: number;
+  metadata?: Record<string, unknown>;
+  ultimo_mensaje?: string | null;
 }
 
 export interface Conversation extends ConversationSummary {
@@ -389,15 +382,29 @@ export function logout() {
 //  ACTUALIZAR FUNCIONES EXISTENTES
 // ============================================
 
+export interface ChatResponse {
+  mensaje: string;
+  respuesta: string;
+  usuario: string;
+  personalidad: string;
+  conversacion_id: string;  // ✅ NUEVO
+  timestamp: string;
+}
+
 export async function enviarMensaje(
   mensaje: string,
   usuario: string,
   personalidad: string = 'amigable',
-  conversationId?: string
+  conversacionId?: string  // ✅ NUEVO
 ): Promise<ChatResponse> {
   const response = await fetchConAuth(`${API_URL}/chat`, {
     method: 'POST',
-    body: JSON.stringify({ mensaje, usuario, personalidad, conversation_id: conversationId }),
+    body: JSON.stringify({
+      mensaje,
+      usuario,
+      personalidad,
+      conversacion_id: conversacionId,  // ✅ NUEVO
+    }),
   });
   
   if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
@@ -427,7 +434,7 @@ export async function obtenerConversacion(id: string): Promise<Conversation> {
 
 export async function renombrarConversacion(id: string, titulo: string): Promise<ConversationSummary> {
   const response = await fetchConAuth(`${API_URL}/conversaciones/${id}`, {
-    method: 'PATCH',
+    method: 'PUT',
     body: JSON.stringify({ titulo }),
   });
   if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
@@ -463,6 +470,38 @@ export async function enviarFeedback(
 // Y así con TODAS las funciones...
 export async function obtenerEstadisticasMemoria() {
   const response = await fetchConAuth(`${API_URL}/memoria/estadisticas`);
+  if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
+  return await response.json();
+}
+
+export async function actualizarConversacion(
+  convId: string,
+  cambios: { titulo?: string; personalidad?: string; archivada?: boolean; destacada?: boolean }
+) {
+  const response = await fetchConAuth(`${API_URL}/conversaciones/${convId}`, {
+    method: 'PUT',
+    body: JSON.stringify(cambios),
+  });
+  if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
+  return await response.json();
+}
+
+export async function eliminarTodasConversaciones() {
+  const response = await fetchConAuth(`${API_URL}/conversaciones`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
+  return await response.json();
+}
+
+export async function buscarConversaciones(termino: string) {
+  const response = await fetchConAuth(`${API_URL}/conversaciones/buscar/${encodeURIComponent(termino)}`);
+  if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
+  return await response.json();
+}
+
+export async function obtenerEstadisticasConversaciones() {
+  const response = await fetchConAuth(`${API_URL}/conversaciones/estadisticas/resumen`);
   if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
   return await response.json();
 }

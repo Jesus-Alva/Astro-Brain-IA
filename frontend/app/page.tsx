@@ -43,6 +43,11 @@ export default function Home() {
   const [tituloEditado, setTituloEditado] = useState('');
   const [conversacionPendienteEliminar, setConversacionPendienteEliminar] = useState<string>();
   const [eliminandoConversacion, setEliminandoConversacion] = useState(false);
+  const [menuConversacionAbierto, setMenuConversacionAbierto] = useState<string>();
+  const [menuConversacionPosicion, setMenuConversacionPosicion] = useState({
+    top: 0,
+    left: 0,
+  });
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const cargarConversaciones = async () => {
@@ -141,10 +146,10 @@ export default function Home() {
 
     try {
       const response = await enviarMensaje(mensajeActual, usuario, personalidad, conversationId);
-      setConversationId(response.conversation_id);
+      setConversationId(response.conversacion_id);
       setConversaciones((prev) => prev.map((conversacion) =>
-        conversacion.id === response.conversation_id
-          ? { ...conversacion, titulo: response.conversation_title, total_mensajes: conversacion.total_mensajes + 2 }
+        conversacion.id === response.conversacion_id
+          ? { ...conversacion, total_mensajes: conversacion.total_mensajes + 2 }
           : conversacion
       ));
 
@@ -213,6 +218,7 @@ export default function Home() {
   };
 
   const iniciarEdicionConversacion = (conversacion: ConversationSummary) => {
+    setMenuConversacionAbierto(undefined);
     setConversacionEditando(conversacion.id);
     setTituloEditado(conversacion.titulo);
   };
@@ -231,6 +237,7 @@ export default function Home() {
   };
 
   const solicitarEliminarConversacion = (id: string) => {
+    setMenuConversacionAbierto(undefined);
     setConversacionPendienteEliminar(id);
   };
 
@@ -363,7 +370,7 @@ export default function Home() {
                 </h3>
                 <div className="sidebar-detail space-y-2 max-h-64 overflow-y-auto">
                   {conversaciones.map((conversacion) => (
-                    <div key={conversacion.id} className="flex items-center gap-2">
+                    <div key={conversacion.id} className="relative flex items-center gap-2">
                       {conversacionEditando === conversacion.id ? (
                         <input
                           autoFocus
@@ -385,18 +392,23 @@ export default function Home() {
                         </button>
                       )}
                       <button
-                        onClick={() => iniciarEdicionConversacion(conversacion)}
-                        className="px-2 py-2 text-gray-500 hover:text-purple-600"
-                        title="Cambiar nombre"
+                        type="button"
+                        onClick={(event) => {
+                          const rect = event.currentTarget.getBoundingClientRect();
+                          setMenuConversacionPosicion({
+                            top: rect.bottom + 4,
+                            left: Math.max(8, rect.right - 160),
+                          });
+                          setMenuConversacionAbierto((actual) =>
+                            actual === conversacion.id ? undefined : conversacion.id
+                          );
+                        }}
+                        className="rounded-lg px-2 py-2 text-lg leading-none text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-900 dark:hover:bg-gray-600 dark:hover:text-white"
+                        title="Opciones de conversación"
+                        aria-label={`Opciones de ${conversacion.titulo}`}
+                        aria-expanded={menuConversacionAbierto === conversacion.id}
                       >
-                        ✏️
-                      </button>
-                      <button
-                        onClick={() => solicitarEliminarConversacion(conversacion.id)}
-                        className="px-2 py-2 text-red-500 hover:text-red-700"
-                        title="Eliminar conversación"
-                      >
-                        🗑️
+                        ⋮
                       </button>
                     </div>
                   ))}
@@ -410,6 +422,36 @@ export default function Home() {
               <FeedbackStats key={feedbackRefresh} />
             </div>
             </motion.aside>
+
+            {menuConversacionAbierto && (
+              <div
+                className="fixed z-50 min-w-40 overflow-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-2xl dark:border-gray-700 dark:bg-gray-800"
+                style={{
+                  top: menuConversacionPosicion.top,
+                  left: menuConversacionPosicion.left,
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    const conversacion = conversaciones.find(
+                      (item) => item.id === menuConversacionAbierto
+                    );
+                    if (conversacion) iniciarEdicionConversacion(conversacion);
+                  }}
+                  className="block w-full px-3 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+                >
+                  ✏️ Cambiar nombre
+                </button>
+                <button
+                  type="button"
+                  onClick={() => solicitarEliminarConversacion(menuConversacionAbierto)}
+                  className="block w-full px-3 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                >
+                  🗑️ Eliminar chat
+                </button>
+              </div>
+            )}
 
           </div>
 
