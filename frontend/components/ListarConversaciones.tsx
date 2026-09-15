@@ -262,7 +262,9 @@ export default function Home() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-900">
         <div className="text-white text-center">
-          <div className="text-6xl mb-4 animate-pulse">🧠</div>
+          <div className="mb-4 flex animate-pulse items-center justify-center">
+            <img src="/images/Astro_Code_Icon.png" alt="Astro Code Icon" className="h-6xl w-6xl object-contain" />
+          </div>
           <p className="text-gray-400">Verificando sesión...</p>
         </div>
       </div>
@@ -341,8 +343,10 @@ export default function Home() {
                   </div>
                 ) : messages.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full text-gray-400 dark:text-gray-500">
-                    <div className="text-6xl mb-4">🧠</div>
-                    <p className="text-lg font-semibold text-gray-700 dark:text-gray-300">
+                   <div className="mb-4 flex items-center justify-center">
+                     <img src="/images/Astro_Code_Icon.png" alt="Astro Code Icon" className="h-10 w-10 object-contain" />
+                   </div>
+                   <p className="text-lg font-semibold text-gray-700 dark:text-gray-300">
                       ¡Hola {usuario}!
                     </p>
                     <p className="text-sm mt-2">

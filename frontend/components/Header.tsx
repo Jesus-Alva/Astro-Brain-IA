@@ -1,6 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import { useTheme } from '@/hooks/useTheme';
+import { ConfirmationAlert } from '@/components/ConfirmationAlert';
 
 interface HeaderProps {
     isConnected: boolean;
@@ -12,14 +14,16 @@ interface HeaderProps {
 
 export function Header({ isConnected, usuario, personalidad, onPersonalidadChange, onLogout }: HeaderProps) {
     const { tema, toggleTema, montado } = useTheme();
+    const [confirmOpen, setConfirmOpen] = useState(false);
+    const [confirmLoading, setConfirmLoading] = useState(false);
 
     // Evitar hidratación incorrecta
     if (!montado) {
         return (
             <header className="flex justify-between items-center mb-6 p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
                 <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-linear-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-2xl">
-                        🧠
+                    <div className="w-12 h-12 bg-linear-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center overflow-hidden">
+                        <img src="/images/Astro_Code_Icon.png" alt="Astro Code Icon" className="h-7 w-7 object-contain" />
                     </div>
                     <div>
                         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Astro-IA</h1>
@@ -29,11 +33,22 @@ export function Header({ isConnected, usuario, personalidad, onPersonalidadChang
         );
     }
 
+    const handleConfirmLogout = async () => {
+        setConfirmLoading(true);
+        try {
+            await Promise.resolve(onLogout());
+        } finally {
+            setConfirmLoading(false);
+            setConfirmOpen(false);
+        }
+    };
+
     return (
+        <>
         <header className="flex justify-between items-center mb-6 p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
             <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-linear-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-2xl">
-                    🧠
+                <div className="w-12 h-12 bg-linear-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center overflow-hidden">
+                    <img src="/images/Astro_Code_Icon.png" alt="Astro Code Icon" className="h-10 w-10 object-contain" />
                 </div>
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Astro-IA</h1>
@@ -68,7 +83,7 @@ export function Header({ isConnected, usuario, personalidad, onPersonalidadChang
                     {tema === 'oscuro' ? '☀️' : '🌙'}
                 </button>
                 <button
-                    onClick={onLogout}
+                    onClick={() => setConfirmOpen(true)}
                     className="p-2 bg-red-600 hover:bg-red-700 rounded-lg transition-colors text-white"
                     title="Cerrar sesión"
                     >
@@ -76,5 +91,17 @@ export function Header({ isConnected, usuario, personalidad, onPersonalidadChang
                 </button>
             </div>
         </header>
+
+        <ConfirmationAlert
+            open={confirmOpen}
+            title="Cerrar sesión"
+            message="¿Estás seguro que quieres cerrar la sesión?."
+            confirmLabel="Cerrar sesión"
+            cancelLabel="Cancelar"
+            onCancel={() => setConfirmOpen(false)}
+            onConfirm={handleConfirmLogout}
+            loading={confirmLoading}
+        />
+        </>
     );
 }

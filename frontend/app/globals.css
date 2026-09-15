@@ -35,6 +35,9 @@ body {
   background-color: var(--bg-primary);
   color: var(--text-primary);
   min-height: 100vh;
+  font-family: 'Inter', 'Roboto', 'Montserrat', 'Exo', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* ============================================
@@ -125,4 +128,20 @@ body {
     opacity: 0.5;
     cursor: not-allowed;
   }
+}
+
+/* TIPOGRAFÍA: títulos en Exo, cuerpo en Inter */
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Exo', 'Inter', sans-serif;
+  letter-spacing: -0.01em;
+}
+
+/* Utilidades para aplicar fuentes selectivamente */
+.font-exo {
+  font-family: 'Exo', 'Inter', sans-serif !important;
+}
+
+.font-inter {
+  font-family: 'Inter', 'Roboto', 'Montserrat', sans-serif !important;
 }

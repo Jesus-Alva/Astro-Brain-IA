@@ -48,7 +48,7 @@ export function Login({ onLoginExitoso }: LoginProps) {
         if (!aceptaPoliticas) {
           throw new Error('Debes aceptar las políticas de privacidad para continuar');
         }
-        
+
         const data = await registrar(nombre, email, password, aceptaPoliticas);
         onLoginExitoso(data.nombre);
       } else {
@@ -58,7 +58,7 @@ export function Login({ onLoginExitoso }: LoginProps) {
         if (!password) {
           throw new Error('Ingresa tu contraseña');
         }
-        
+
         const data = await login(identificador, password);
         onLoginExitoso(data.nombre);
       }
@@ -82,185 +82,201 @@ export function Login({ onLoginExitoso }: LoginProps) {
 
   return (
     <>
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900 py-8">
-        <div className="w-full max-w-md px-8">
-          {/* Header */}
-          <div className="text-center mb-8">
-            <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-4xl mx-auto mb-4 shadow-lg">
-              🧠
-            </div>
-            <h1 className="text-3xl font-bold text-white">Astro-IA</h1>
-            <p className="text-gray-400 mt-2">
-              {modo === 'login' ? 'Inicia sesión para continuar' : 'Crea tu cuenta gratis'}
-            </p>
-          </div>
-
-          {/* Formulario */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {modo === 'login' ? (
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Usuario o Email
-                </label>
-                <input
-                  type="text"
-                  value={identificador}
-                  onChange={(e) => setIdentificador(e.target.value)}
-                  placeholder="jesus o jesus@example.com"
-                  required
-                  autoComplete="username"
-                  className="w-full bg-gray-800 text-white rounded-lg px-4 py-3 border border-gray-700 focus:outline-none focus:border-purple-500 transition-colors"
+      <div
+        className="relative flex min-h-screen items-center justify-center overflow-hidden bg-linear-to-br from-slate-950 via-violet-950/40 to-slate-950 px-4 py-8"
+        style={{
+          backgroundImage: "url('/images/Astro Code Difuminado.jpeg')",
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundAttachment: 'fixed',
+        }}
+      >
+        <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(168,85,247,0.22),transparent_30%),radial-gradient(circle_at_bottom,_rgba(59,130,246,0.18),transparent_35%)]" />
+        <div className="relative w-full max-w-md">
+          <div className="rounded-3xl border border-violet-400/40 bg-white/5 p-6 shadow-[0_0_0_1px_rgba(167,139,250,0.18),0_0_25px_rgba(168,85,247,0.3),0_20px_80px_rgba(15,23,42,0.75)] backdrop-blur-xl sm:p-8">
+            {/* Header */}
+            <div className="text-center mb-8">
+              <div className="mx-auto mb-4 flex h-32 w-32 items-center justify-center overflow-hidden rounded-full border border-white/20 bg-linear-to-br from-violet-500/80 to-cyan-500/80 shadow-[0_0_30px_rgba(168,85,247,0.45)] backdrop-blur-md">
+                <img
+                  src="/images/Astro_Code_Icon.png"
+                  alt="Astro Code Icon"
+                  className="h-28 w-28 object-contain"
                 />
-                <p className="text-xs text-gray-500 mt-1">
-                  Puedes usar tu nombre de usuario o tu email
-                </p>
               </div>
-            ) : (
-              <>
+              <h1 className="text-3xl font-bold text-white drop-shadow-sm">Astro-IA</h1>
+              <p className="mt-2 text-sm text-slate-300">
+                {modo === 'login' ? 'Inicia sesión para continuar' : 'Crea tu cuenta gratis'}
+              </p>
+            </div>
+
+            {/* Formulario */}
+            <form onSubmit={handleSubmit} className="space-y-4 ">
+              {modo === 'login' ? (
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Nombre de usuario
+                  <label className="mb-2 block text-sm font-medium text-slate-200">
+                    Usuario o Email
                   </label>
                   <input
                     type="text"
-                    value={nombre}
-                    onChange={(e) => setNombre(e.target.value)}
-                    placeholder="jesus"
+                    value={identificador}
+                    onChange={(e) => setIdentificador(e.target.value)}
+                    placeholder="jesus o jesus@example.com"
                     required
-                    minLength={3}
                     autoComplete="username"
-                    className="w-full bg-gray-800 text-white rounded-lg px-4 py-3 border border-gray-700 focus:outline-none focus:border-purple-500 transition-colors"
+                    className="w-full rounded-xl border border-white/10 bg-slate-900/40 px-4 py-3 text-white placeholder:text-slate-400 shadow-inner shadow-slate-950/40 transition-all focus:border-violet-400/80 focus:outline-none focus:ring-2 focus:ring-violet-500/30"
                   />
+                  <p className="mt-1 text-xs text-slate-400">
+                    Puedes usar tu nombre de usuario o tu email
+                  </p>
                 </div>
+              ) : (
+                <>
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-200">
+                      Nombre de usuario
+                    </label>
+                    <input
+                      type="text"
+                      value={nombre}
+                      onChange={(e) => setNombre(e.target.value)}
+                      placeholder="jesus"
+                      required
+                      minLength={3}
+                      autoComplete="username"
+                      className="w-full rounded-xl border border-white/10 bg-slate-900/40 px-4 py-3 text-white placeholder:text-slate-400 shadow-inner shadow-slate-950/40 transition-all focus:border-violet-400/80 focus:outline-none focus:ring-2 focus:ring-violet-500/30"
+                    />
+                  </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="jesus@example.com"
-                    required
-                    autoComplete="email"
-                    className="w-full bg-gray-800 text-white rounded-lg px-4 py-3 border border-gray-700 focus:outline-none focus:border-purple-500 transition-colors"
-                  />
-                </div>
-              </>
-            )}
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-200">
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="jesus@example.com"
+                      required
+                      autoComplete="email"
+                      className="w-full rounded-xl border border-white/10 bg-slate-900/40 px-4 py-3 text-white placeholder:text-slate-400 shadow-inner shadow-slate-950/40 transition-all focus:border-violet-400/80 focus:outline-none focus:ring-2 focus:ring-violet-500/30"
+                    />
+                  </div>
+                </>
+              )}
 
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Contraseña
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Mínimo 6 caracteres"
-                required
-                minLength={6}
-                autoComplete={modo === 'login' ? 'current-password' : 'new-password'}
-                className="w-full bg-gray-800 text-white rounded-lg px-4 py-3 border border-gray-700 focus:outline-none focus:border-purple-500 transition-colors"
-              />
-            </div>
-
-            {modo === 'registro' && (
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Confirmar contraseña
+                <label className="mb-2 block text-sm font-medium text-slate-200">
+                  Contraseña
                 </label>
                 <input
                   type="password"
-                  value={confirmarPassword}
-                  onChange={(e) => setConfirmarPassword(e.target.value)}
-                  placeholder="Repite la contraseña"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Mínimo 6 caracteres"
                   required
                   minLength={6}
-                  autoComplete="new-password"
-                  className="w-full bg-gray-800 text-white rounded-lg px-4 py-3 border border-gray-700 focus:outline-none focus:border-purple-500 transition-colors"
+                  autoComplete={modo === 'login' ? 'current-password' : 'new-password'}
+                  className="w-full rounded-xl border border-white/10 bg-slate-900/40 px-4 py-3 text-white placeholder:text-slate-400 shadow-inner shadow-slate-950/40 transition-all focus:border-violet-400/80 focus:outline-none focus:ring-2 focus:ring-violet-500/30"
                 />
               </div>
-            )}
 
-            {/* ✅ CHECKBOX DE ACEPTACIÓN DE POLÍTICAS */}
-            {modo === 'registro' && (
-              <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
-                <label className="flex items-start gap-3 cursor-pointer">
+              {modo === 'registro' && (
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-200">
+                    Confirmar contraseña
+                  </label>
                   <input
-                    type="checkbox"
-                    checked={aceptaPoliticas}
-                    onChange={(e) => setAceptaPoliticas(e.target.checked)}
-                    className="mt-1 w-4 h-4 rounded border-gray-600 text-purple-500 focus:ring-purple-500 focus:ring-offset-gray-800"
+                    type="password"
+                    value={confirmarPassword}
+                    onChange={(e) => setConfirmarPassword(e.target.value)}
+                    placeholder="Repite la contraseña"
+                    required
+                    minLength={6}
+                    autoComplete="new-password"
+                    className="w-full rounded-xl border border-white/10 bg-slate-900/40 px-4 py-3 text-white placeholder:text-slate-400 shadow-inner shadow-slate-950/40 transition-all focus:border-violet-400/80 focus:outline-none focus:ring-2 focus:ring-violet-500/30"
                   />
-                  <span className="text-sm text-gray-300 leading-relaxed">
-                    He leído y acepto la{' '}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setMostrarPoliticas(true);
-                      }}
-                      className="text-purple-400 hover:text-purple-300 underline font-medium"
-                    >
-                      Política de Privacidad
-                    </button>
-                    {' '}y el tratamiento de mis datos personales.
-                  </span>
-                </label>
-
-                <div className="mt-3 pt-3 border-t border-gray-700 text-xs text-gray-500 space-y-1">
-                  <p>✅ Tus datos se almacenan localmente</p>
-                  <p>✅ NO vendemos tu información a terceros</p>
-                  <p>✅ Puedes eliminar tus datos cuando quieras</p>
                 </div>
-              </div>
-            )}
+              )}
 
-            {error && (
-              <div className="bg-red-900/30 border border-red-700 rounded-lg p-3 animate-fade-in">
-                <p className="text-red-400 text-sm">❌ {error}</p>
-              </div>
-            )}
+              {/* ✅ CHECKBOX DE ACEPTACIÓN DE POLÍTICAS */}
+              {modo === 'registro' && (
+                <div className="rounded-2xl border border-white/10 bg-slate-900/30 p-4 shadow-inner shadow-slate-950/20">
+                  <label className="flex cursor-pointer items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={aceptaPoliticas}
+                      onChange={(e) => setAceptaPoliticas(e.target.checked)}
+                      className="mt-1 h-4 w-4 rounded border-slate-600 bg-slate-900 text-violet-500 focus:ring-violet-500 focus:ring-offset-slate-900"
+                    />
+                    <span className="text-sm leading-relaxed text-slate-200">
+                      He leído y acepto la{' '}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setMostrarPoliticas(true);
+                        }}
+                        className="font-medium text-violet-300 underline decoration-violet-400/60 underline-offset-2 hover:text-violet-200"
+                      >
+                        Política de Privacidad
+                      </button>
+                      {' '}y el tratamiento de mis datos personales.
+                    </span>
+                  </label>
 
-            <button
-              type="submit"
-              disabled={cargando || (modo === 'registro' && !aceptaPoliticas)}
-              className="w-full bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg py-3 font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {cargando
-                ? '⏳ Procesando...'
-                : modo === 'login'
-                ? '🔐 Iniciar Sesión'
-                : '✨ Crear Cuenta'}
-            </button>
-          </form>
+                  <div className="mt-3 space-y-1 border-t border-white/10 pt-3 text-xs text-slate-400">
+                    <p>✅ Tus datos se almacenan localmente</p>
+                    <p>✅ NO vendemos tu información a terceros</p>
+                    <p>✅ Puedes eliminar tus datos cuando quieras</p>
+                  </div>
+                </div>
+              )}
 
-          {/* Cambiar modo */}
-          <div className="mt-6 text-center">
-            <button
-              onClick={cambiarModo}
-              className="text-purple-400 hover:text-purple-300 text-sm transition-colors"
-            >
-              {modo === 'login'
-                ? '¿No tienes cuenta? Regístrate gratis'
-                : '¿Ya tienes cuenta? Inicia sesión'}
-            </button>
-          </div>
+              {error && (
+                <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-3 shadow-inner shadow-red-950/30">
+                  <p className="text-sm text-red-300">❌ {error}</p>
+                </div>
+              )}
 
-          {/* Footer con enlaces */}
-          <div className="mt-8 text-center space-y-2">
-            <button
-              onClick={() => setMostrarPoliticas(true)}
-              className="text-xs text-gray-500 hover:text-gray-400 transition-colors"
-            >
-              🔒 Ver Política de Privacidad
-            </button>
-            <p className="text-xs text-gray-600">
-              Tus datos están seguros y encriptados
-            </p>
+              <button
+                type="submit"
+                disabled={cargando || (modo === 'registro' && !aceptaPoliticas)}
+                className="w-full rounded-xl bg-gradient-to-r from-violet-500 to-cyan-500 py-3 font-medium text-white shadow-[0_12px_30px_rgba(168,85,247,0.35)] transition-all hover:opacity-90 hover:shadow-[0_16px_32px_rgba(45,212,191,0.35)] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {cargando
+                  ? '⏳ Procesando...'
+                  : modo === 'login'
+                    ? '🔐 Iniciar Sesión'
+                    : '✨ Crear Cuenta'}
+              </button>
+            </form>
+
+            {/* Cambiar modo */}
+            <div className="mt-6 text-center">
+              <button
+                onClick={cambiarModo}
+                className="text-sm text-violet-300 transition-colors hover:text-violet-200"
+              >
+                {modo === 'login'
+                  ? '¿No tienes cuenta? Regístrate gratis'
+                  : '¿Ya tienes cuenta? Inicia sesión'}
+              </button>
+            </div>
+
+            {/* Footer con enlaces */}
+            <div className="mt-8 space-y-2 text-center">
+              <button
+                onClick={() => setMostrarPoliticas(true)}
+                className="text-xs text-slate-400 transition-colors hover:text-slate-300"
+              >
+                🔒 Ver Política de Privacidad
+              </button>
+              <p className="text-xs text-slate-500">
+                Tus datos están seguros y encriptados
+              </p>
+            </div>
           </div>
         </div>
       </div>
